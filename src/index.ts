@@ -1,5 +1,5 @@
 import type {
-  IndoPay402Options,
+  TransX402Options,
   PaymentDetails,
   PaymentResult,
   PaymentRequirements,
@@ -20,7 +20,7 @@ import {
 import type { Address, Hex } from "viem";
 
 export type {
-  IndoPay402Options,
+  TransX402Options,
   PaymentDetails,
   PaymentResult,
   PaymentRequirements,
@@ -29,8 +29,8 @@ export { WalletConnectionError } from "./wallet.js";
 export { Permit2Error } from "./permit2.js";
 
 const FACILITATOR_URLS = {
-  sandbox: "https://sandbox.indopay402.xyz",
-  production: "https://api.indopay402.xyz",
+  sandbox: "https://sandbox.transx402.com",
+  production: "https://api.transx402.com",
 } as const;
 
 const IDRX_CONTRACT = "0x18Bc5bcC660cf2B9cE3cd51a404aFe1a0cBD3C22" as const;
@@ -85,14 +85,14 @@ function createPermitMessage(
   });
 }
 
-export class IndoPay402Client {
+export class TransX402Client {
   private apiKey: string;
   private facilitatorUrl: string;
-  private options: IndoPay402Options;
+  private options: TransX402Options;
   private walletConnection: WalletConnection | null = null;
   private publicClient: ReturnType<typeof createPublicClientForChain> | null = null;
 
-  constructor(options: IndoPay402Options) {
+  constructor(options: TransX402Options) {
     this.options = options;
     this.apiKey = options.apiKey;
 
@@ -346,11 +346,11 @@ export class IndoPay402Client {
   }
 }
 
-export const IndoPay402 = {
-  create(options: IndoPay402Options): IndoPay402Client {
-    return new IndoPay402Client(options);
+export const TransX402 = {
+  create(options: TransX402Options): TransX402Client {
+    return new TransX402Client(options);
   },
 };
 
 export { Paywall, createPaywall, type PaywallOptions } from "./paywall.js";
-export default IndoPay402;
+export default TransX402;

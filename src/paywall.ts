@@ -1,8 +1,8 @@
-import { IndoPay402Client } from "./index.js";
-import type { IndoPay402Options, PaymentResult } from "./types.js";
+import { TransX402Client } from "./index.js";
+import type { TransX402Options, PaymentResult } from "./types.js";
 
 export interface PaywallOptions {
-  /** API key from IndoPay402 dashboard */
+  /** API key from TransX402 dashboard */
   apiKey: string;
   /** Element selector or HTMLElement to gate */
   selector: string | HTMLElement;
@@ -42,7 +42,7 @@ interface PaywallState {
 
 export class Paywall {
   private options: PaywallOptions;
-  private client: IndoPay402Client;
+  private client: TransX402Client;
   private targetElement: HTMLElement | null = null;
   private overlayElement: HTMLElement | null = null;
   private state: PaywallState = {
@@ -60,7 +60,7 @@ export class Paywall {
       ...options,
     };
 
-    this.client = new IndoPay402Client({
+    this.client = new TransX402Client({
       apiKey: this.options.apiKey,
       onPaymentStart: () => {
         this.setState({ isProcessing: true, error: null });
@@ -133,17 +133,17 @@ export class Paywall {
     if (!this.targetElement) return;
 
     const overlay = document.createElement("div");
-    overlay.className = "indopay402-paywall-overlay";
+    overlay.className = "transx402-paywall-overlay";
     overlay.innerHTML = `
-      <div class="indopay402-paywall-content">
-        <div class="indopay402-paywall-icon">🔒</div>
-        <h3 class="indopay402-paywall-title">${this.options.title}</h3>
-        <p class="indopay402-paywall-description">${this.options.description}</p>
-        <button class="indopay402-paywall-button" onclick="this.closest('.indopay402-paywall-overlay').dispatchEvent(new CustomEvent('paywall:open'))">
-          <span class="indopay402-paywall-button-text">Pay with IDRX</span>
-          <span class="indopay402-paywall-button-price">Rp ${this.options.price.toLocaleString("id-ID")}</span>
+      <div class="transx402-paywall-content">
+        <div class="transx402-paywall-icon">🔒</div>
+        <h3 class="transx402-paywall-title">${this.options.title}</h3>
+        <p class="transx402-paywall-description">${this.options.description}</p>
+        <button class="transx402-paywall-button" onclick="this.closest('.transx402-paywall-overlay').dispatchEvent(new CustomEvent('paywall:open'))">
+          <span class="transx402-paywall-button-text">Pay with IDRX</span>
+          <span class="transx402-paywall-button-price">Rp ${this.options.price.toLocaleString("id-ID")}</span>
         </button>
-        <p class="indopay402-paywall-footer">Powered by IndoPay402</p>
+        <p class="transx402-paywall-footer">Powered by TransX402</p>
       </div>
     `;
 
@@ -181,7 +181,7 @@ export class Paywall {
   }
 
   private injectStyles(theme: PaywallOptions["theme"]) {
-    const styleId = "indopay402-paywall-styles";
+    const styleId = "transx402-paywall-styles";
     if (document.getElementById(styleId)) return;
 
     const primary = theme?.primary || "#2563eb";
@@ -192,7 +192,7 @@ export class Paywall {
     const styles = document.createElement("style");
     styles.id = styleId;
     styles.textContent = `
-      .indopay402-paywall-content {
+      .transx402-paywall-content {
         text-align: center;
         padding: 2rem;
         background: ${background};
@@ -203,26 +203,26 @@ export class Paywall {
         border: 1px solid #e2e8f0;
       }
       
-      .indopay402-paywall-icon {
+      .transx402-paywall-icon {
         font-size: 3rem;
         margin-bottom: 1rem;
       }
       
-      .indopay402-paywall-title {
+      .transx402-paywall-title {
         font-size: 1.5rem;
         font-weight: 600;
         margin: 0 0 0.5rem 0;
         color: ${text};
       }
       
-      .indopay402-paywall-description {
+      .transx402-paywall-description {
         font-size: 1rem;
         color: #64748b;
         margin: 0 0 1.5rem 0;
         line-height: 1.5;
       }
       
-      .indopay402-paywall-button {
+      .transx402-paywall-button {
         display: flex;
         flex-direction: column;
         align-items: center;
@@ -240,38 +240,38 @@ export class Paywall {
         gap: 0.25rem;
       }
       
-      .indopay402-paywall-button:hover {
+      .transx402-paywall-button:hover {
         opacity: 0.9;
         transform: translateY(-1px);
       }
       
-      .indopay402-paywall-button:active {
+      .transx402-paywall-button:active {
         transform: translateY(0);
       }
       
-      .indopay402-paywall-button:disabled {
+      .transx402-paywall-button:disabled {
         opacity: 0.5;
         cursor: not-allowed;
       }
       
-      .indopay402-paywall-button-text {
+      .transx402-paywall-button-text {
         font-size: 1rem;
         font-weight: 600;
       }
       
-      .indopay402-paywall-button-price {
+      .transx402-paywall-button-price {
         font-size: 0.875rem;
         opacity: 0.9;
       }
       
-      .indopay402-paywall-footer {
+      .transx402-paywall-footer {
         font-size: 0.75rem;
         color: #94a3b8;
         margin: 1rem 0 0 0;
       }
 
       /* Modal styles */
-      .indopay402-modal-overlay {
+      .transx402-modal-overlay {
         position: fixed;
         top: 0;
         left: 0;
@@ -285,7 +285,7 @@ export class Paywall {
         padding: 1rem;
       }
 
-      .indopay402-modal {
+      .transx402-modal {
         background: ${background};
         border-radius: ${borderRadius};
         max-width: 450px;
@@ -295,23 +295,23 @@ export class Paywall {
         box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
       }
 
-      .indopay402-modal-header {
+      .transx402-modal-header {
         padding: 1.5rem;
         border-bottom: 1px solid #e2e8f0;
       }
 
-      .indopay402-modal-title {
+      .transx402-modal-title {
         font-size: 1.25rem;
         font-weight: 600;
         margin: 0;
         color: ${text};
       }
 
-      .indopay402-modal-body {
+      .transx402-modal-body {
         padding: 1.5rem;
       }
 
-      .indopay402-modal-footer {
+      .transx402-modal-footer {
         padding: 1rem 1.5rem;
         border-top: 1px solid #e2e8f0;
         display: flex;
@@ -319,7 +319,7 @@ export class Paywall {
         gap: 0.5rem;
       }
 
-      .indopay402-error {
+      .transx402-error {
         background: #fef2f2;
         border: 1px solid #fecaca;
         color: #dc2626;
@@ -329,35 +329,35 @@ export class Paywall {
         margin-bottom: 1rem;
       }
 
-      .indopay402-step-indicator {
+      .transx402-step-indicator {
         display: flex;
         justify-content: center;
         gap: 0.5rem;
         margin-bottom: 1.5rem;
       }
 
-      .indopay402-step {
+      .transx402-step {
         width: 8px;
         height: 8px;
         border-radius: 50%;
         background: #e2e8f0;
       }
 
-      .indopay402-step.active {
+      .transx402-step.active {
         background: ${primary};
       }
 
-      .indopay402-loader {
+      .transx402-loader {
         display: inline-block;
         width: 20px;
         height: 20px;
         border: 2px solid rgba(255,255,255,0.3);
         border-radius: 50%;
         border-top-color: white;
-        animation: indopay402-spin 1s ease-in-out infinite;
+        animation: transx402-spin 1s ease-in-out infinite;
       }
 
-      @keyframes indopay402-spin {
+      @keyframes transx402-spin {
         to { transform: rotate(360deg); }
       }
     `;
@@ -380,19 +380,19 @@ export class Paywall {
 
   private createModal(): HTMLElement {
     const overlay = document.createElement("div");
-    overlay.className = "indopay402-modal-overlay";
+    overlay.className = "transx402-modal-overlay";
     overlay.innerHTML = `
-      <div class="indopay402-modal">
-        <div class="indopay402-modal-header">
-          <h2 class="indopay402-modal-title">${this.options.title}</h2>
+      <div class="transx402-modal">
+        <div class="transx402-modal-header">
+          <h2 class="transx402-modal-title">${this.options.title}</h2>
         </div>
-        <div class="indopay402-modal-body">
-          <div class="indopay402-step-indicator">
-            <div class="indopay402-step ${this.state.step === "connect" ? "active" : ""}"></div>
-            <div class="indopay402-step ${this.state.step === "approve" ? "active" : ""}"></div>
-            <div class="indopay402-step ${this.state.step === "pay" ? "active" : ""}"></div>
+        <div class="transx402-modal-body">
+          <div class="transx402-step-indicator">
+            <div class="transx402-step ${this.state.step === "connect" ? "active" : ""}"></div>
+            <div class="transx402-step ${this.state.step === "approve" ? "active" : ""}"></div>
+            <div class="transx402-step ${this.state.step === "pay" ? "active" : ""}"></div>
           </div>
-          <div id="indopay402-modal-content">
+          <div id="transx402-modal-content">
             ${this.renderModalContent()}
           </div>
         </div>
@@ -412,8 +412,8 @@ export class Paywall {
   private renderModalContent(): string {
     if (this.state.error) {
       return `
-        <div class="indopay402-error">${this.state.error}</div>
-        <button class="indopay402-paywall-button" onclick="this.closest('.indopay402-modal-overlay').querySelector('#retry-button').click()">
+        <div class="transx402-error">${this.state.error}</div>
+        <button class="transx402-paywall-button" onclick="this.closest('.transx402-modal-overlay').querySelector('#retry-button').click()">
           Try Again
         </button>
       `;
@@ -422,7 +422,7 @@ export class Paywall {
     if (this.state.isProcessing) {
       return `
         <div style="text-align: center; padding: 2rem;">
-          <div class="indopay402-loader" style="margin: 0 auto 1rem;"></div>
+          <div class="transx402-loader" style="margin: 0 auto 1rem;"></div>
           <p>Processing payment...</p>
         </div>
       `;
@@ -436,7 +436,7 @@ export class Paywall {
             <p style="margin-bottom: 1.5rem; color: #64748b;">
               Connect your wallet to proceed with the payment
             </p>
-            <button class="indopay402-paywall-button" id="indopay402-connect-btn">
+            <button class="transx402-paywall-button" id="transx402-connect-btn">
               Connect Wallet
             </button>
           </div>
@@ -453,7 +453,7 @@ export class Paywall {
               This is a one-time approval that allows us to process payments on your behalf. 
               You only need to do this once per wallet.
             </p>
-            <button class="indopay402-paywall-button" id="indopay402-approve-btn">
+            <button class="transx402-paywall-button" id="transx402-approve-btn">
               Approve IDRX
             </button>
           </div>
@@ -469,7 +469,7 @@ export class Paywall {
             <p style="margin-bottom: 1.5rem; color: #64748b;">
               Click below to complete your payment
             </p>
-            <button class="indopay402-paywall-button" id="indopay402-pay-btn">
+            <button class="transx402-paywall-button" id="transx402-pay-btn">
               Pay Now
             </button>
           </div>
@@ -485,7 +485,7 @@ export class Paywall {
             <p style="margin-bottom: 1.5rem; color: #64748b;">
               Your content is now unlocked.
             </p>
-            <button class="indopay402-paywall-button" id="indopay402-close-btn">
+            <button class="transx402-paywall-button" id="transx402-close-btn">
               Continue Reading
             </button>
           </div>
@@ -529,7 +529,7 @@ export class Paywall {
 
   private attachButtonListeners() {
     // Connect button
-    const connectBtn = document.getElementById("indopay402-connect-btn");
+    const connectBtn = document.getElementById("transx402-connect-btn");
     if (connectBtn) {
       connectBtn.addEventListener("click", async () => {
         try {
@@ -545,7 +545,7 @@ export class Paywall {
     }
 
     // Approve button
-    const approveBtn = document.getElementById("indopay402-approve-btn");
+    const approveBtn = document.getElementById("transx402-approve-btn");
     if (approveBtn) {
       approveBtn.addEventListener("click", async () => {
         this.setState({ isProcessing: true, error: null });
@@ -563,7 +563,7 @@ export class Paywall {
     }
 
     // Pay button
-    const payBtn = document.getElementById("indopay402-pay-btn");
+    const payBtn = document.getElementById("transx402-pay-btn");
     if (payBtn) {
       payBtn.addEventListener("click", async () => {
         this.setState({ isProcessing: true, error: null });
@@ -584,13 +584,13 @@ export class Paywall {
     }
 
     // Close button
-    const closeBtn = document.getElementById("indopay402-close-btn");
+    const closeBtn = document.getElementById("transx402-close-btn");
     if (closeBtn) {
       closeBtn.addEventListener("click", () => this.close());
     }
 
     // Retry button
-    const retryBtn = document.getElementById("indopay402-retry-btn");
+    const retryBtn = document.getElementById("transx402-retry-btn");
     if (retryBtn) {
       retryBtn.addEventListener("click", () => {
         this.setState({ error: null });
@@ -605,17 +605,17 @@ export class Paywall {
   }
 
   private updateModal() {
-    const modal = document.querySelector(".indopay402-modal-overlay");
+    const modal = document.querySelector(".transx402-modal-overlay");
     if (!modal) return;
 
-    const content = modal.querySelector("#indopay402-modal-content");
+    const content = modal.querySelector("#transx402-modal-content");
     if (content) {
       content.innerHTML = this.renderModalContent();
       this.attachButtonListeners();
     }
 
     // Update step indicators
-    const steps = modal.querySelectorAll(".indopay402-step");
+    const steps = modal.querySelectorAll(".transx402-step");
     steps.forEach((step, index) => {
       const stepNames: Array<PaywallState["step"]> = ["connect", "approve", "pay"];
       if (stepNames[index] === this.state.step) {
@@ -628,7 +628,7 @@ export class Paywall {
 
   private close() {
     this.setState({ isOpen: false });
-    const modal = document.querySelector(".indopay402-modal-overlay");
+    const modal = document.querySelector(".transx402-modal-overlay");
     if (modal && modal.parentNode) {
       modal.parentNode.removeChild(modal);
     }

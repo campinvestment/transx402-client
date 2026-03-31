@@ -1,4 +1,4 @@
-export interface IndoPay402Options {
+export interface TransX402Options {
   apiKey: string;
   /** Override facilitator URL (auto-detected from apiKey prefix) */
   facilitatorUrl?: string;
