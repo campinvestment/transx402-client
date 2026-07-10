@@ -2,15 +2,14 @@ import {
   createPublicClient,
   createWalletClient,
   custom,
+  defineChain,
   http,
   parseAbi,
   type Address,
+  type Chain,
   type Hex,
 } from "viem";
-import { base } from "viem/chains";
 import type { EIP1193Provider } from "./wallet.js";
-
-const PERMIT2_ADDRESS = "0x000000000022D473030F116dDEE9F6B43aC78BA3" as const;
 
 const ERC20_ABI = parseAbi([
   "function allowance(address owner, address spender) external view returns (uint256)",
@@ -47,9 +46,16 @@ export class Permit2Error extends Error {
 /**
  * Create a viem public client for reading from the blockchain
  */
-export function createPublicClientForChain(rpcUrl: string) {
+export function createPublicClientForChain(rpcUrl: string, chainId: number) {
+  const chain = defineChain({
+    id: chainId,
+    name: `transx-${chainId}`,
+    nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
+    rpcUrls: { default: { http: [rpcUrl] } },
+  });
+
   return createPublicClient({
-    chain: base,
+    chain,
     transport: http(rpcUrl),
   });
 }
@@ -61,7 +67,7 @@ export async function checkPermit2Approval(
   publicClient: ReturnType<typeof createPublicClientForChain>,
   token: Address,
   owner: Address,
-  spender: Address = PERMIT2_ADDRESS
+  permit2Address: Address
 ): Promise<Permit2Approval> {
   try {
     // Check ERC20 allowance first
@@ -69,12 +75,12 @@ export async function checkPermit2Approval(
       address: token,
       abi: ERC20_ABI,
       functionName: "allowance",
-      args: [owner, spender],
+      args: [owner, permit2Address],
     })) as bigint;
 
     // Check Permit2 allowance
     const permit2Allowance = await publicClient.readContract({
-      address: PERMIT2_ADDRESS,
+      address: permit2Address,
       abi: PERMIT2_ABI,
       functionName: "allowance",
       args: [owner, token, owner], // spender is the owner for self-transfer
@@ -102,13 +108,23 @@ export async function checkPermit2Approval(
 export async function requestPermit2Approval(
   provider: EIP1193Provider,
   token: Address,
+  permit2Address: Address,
+  chainId: number,
   amount: bigint = BigInt("115792089237316195423570985008687907853269984665640564039457584007913129639935"), // max uint256
   rpcUrl?: string
 ): Promise<Hex> {
   try {
+    const effectiveRpcUrl = rpcUrl ?? "https://mainnet.base.org";
+    const chain: Chain = defineChain({
+      id: chainId,
+      name: `transx-${chainId}`,
+      nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
+      rpcUrls: { default: { http: [effectiveRpcUrl] } },
+    });
+
     // Create wallet client with custom provider
     const walletClient = createWalletClient({
-      chain: base,
+      chain,
       transport: custom(provider),
     });
 
@@ -129,13 +145,13 @@ export async function requestPermit2Approval(
       address: token,
       abi: ERC20_ABI,
       functionName: "approve",
-      args: [PERMIT2_ADDRESS, amount],
-      chain: base,
+      args: [permit2Address, amount],
+      chain,
     });
 
     // Wait for the transaction to be mined
     if (rpcUrl) {
-      const publicClient = createPublicClientForChain(rpcUrl);
+      const publicClient = createPublicClientForChain(rpcUrl, chainId);
       await publicClient.waitForTransactionReceipt({ hash });
     }
 
@@ -165,14 +181,14 @@ export async function isAmountApproved(
   token: Address,
   owner: Address,
   requiredAmount: bigint,
-  spender: Address = PERMIT2_ADDRESS
+  permit2Address: Address
 ): Promise<boolean> {
   try {
     const allowance = (await publicClient.readContract({
       address: token,
       abi: ERC20_ABI,
       functionName: "allowance",
-      args: [owner, spender],
+      args: [owner, permit2Address],
     })) as bigint;
 
     return allowance >= requiredAmount;

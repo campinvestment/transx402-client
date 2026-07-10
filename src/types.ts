@@ -2,6 +2,14 @@ export interface TransX402Options {
   apiKey: string;
   /** Override facilitator URL (auto-detected from apiKey prefix) */
   facilitatorUrl?: string;
+  /** Override RPC URL */
+  rpcUrl?: string;
+  /** Override EVM chain ID */
+  chainId?: number;
+  /** Override token contract address */
+  tokenAddress?: string;
+  /** Override Permit2 contract address */
+  permit2Address?: string;
   /** Token symbol (default: IDRX) */
   token?: string;
   /** Network (default: base) */

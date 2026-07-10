@@ -33,8 +33,39 @@ const FACILITATOR_URLS = {
   production: "https://api.transx402.com",
 } as const;
 
-const IDRX_CONTRACT = "0x18Bc5bcC660cf2B9cE3cd51a404aFe1a0cBD3C22" as const;
-const BASE_CHAIN_ID = 8453;
+const DEFAULT_NETWORK_CONFIG = {
+  sandbox: {
+    rpcUrl: "http://localhost:8545",
+    chainId: 8453,
+    tokenAddress: "0x18Bc5bcC660cf2B9cE3cd51a404aFe1a0cBD3C22",
+    permit2Address: "0x000000000022D473030F116dDEE9F6B43aC78BA3",
+    network: "sandbox",
+  },
+  production: {
+    rpcUrl: "https://mainnet.base.org",
+    chainId: 8453,
+    tokenAddress: "0x18Bc5bcC660cf2B9cE3cd51a404aFe1a0cBD3C22",
+    permit2Address: "0x000000000022D473030F116dDEE9F6B43aC78BA3",
+    network: "base",
+  },
+} as const;
+
+interface FacilitatorConfigResponse {
+  sandbox?: {
+    rpcUrl: string;
+    chainId: number;
+    network: string;
+    tokens?: { IDRX?: string };
+    permit2Address?: string;
+  };
+  production?: {
+    rpcUrl: string;
+    chainId: number;
+    network: string;
+    tokens?: { IDRX?: string };
+    permit2Address?: string;
+  };
+}
 
 function detectEnvironment(apiKey: string): "sandbox" | "production" {
   if (apiKey.startsWith("ipk_sandbox_")) return "sandbox";
@@ -87,25 +118,72 @@ function createPermitMessage(
 
 export class TransX402Client {
   private apiKey: string;
+  private environment: "sandbox" | "production";
   private facilitatorUrl: string;
   private options: TransX402Options;
   private walletConnection: WalletConnection | null = null;
   private publicClient: ReturnType<typeof createPublicClientForChain> | null = null;
+  private rpcUrl: string;
+  private chainId: number;
+  private tokenAddress: Address;
+  private permit2Address: Address;
+  private network: string;
+  private configReady: Promise<void>;
 
   constructor(options: TransX402Options) {
     this.options = options;
     this.apiKey = options.apiKey;
 
     const env = detectEnvironment(options.apiKey);
+    this.environment = env;
+    const defaults = DEFAULT_NETWORK_CONFIG[env];
     this.facilitatorUrl =
       options.facilitatorUrl ?? FACILITATOR_URLS[env];
 
-    // Initialize public client for the appropriate network
-    const rpcUrl =
-      env === "sandbox"
-        ? "http://localhost:8545"
-        : "https://mainnet.base.org";
-    this.publicClient = createPublicClientForChain(rpcUrl);
+    this.rpcUrl = options.rpcUrl ?? defaults.rpcUrl;
+    this.chainId = options.chainId ?? defaults.chainId;
+    this.tokenAddress = (options.tokenAddress ?? defaults.tokenAddress) as Address;
+    this.permit2Address = (options.permit2Address ?? defaults.permit2Address) as Address;
+    this.network = defaults.network;
+    this.publicClient = createPublicClientForChain(this.rpcUrl, this.chainId);
+    this.configReady = this.initializeConfig();
+  }
+
+  private async initializeConfig(): Promise<void> {
+    const needRemoteConfig =
+      !this.options.rpcUrl ||
+      !this.options.chainId ||
+      !this.options.tokenAddress ||
+      !this.options.permit2Address;
+
+    if (!needRemoteConfig) return;
+
+    try {
+      const response = await fetch(`${this.facilitatorUrl}/config`);
+      if (!response.ok) return;
+
+      const config = (await response.json()) as FacilitatorConfigResponse;
+      const envConfig = config[this.environment];
+      if (!envConfig) return;
+
+      this.rpcUrl = this.options.rpcUrl ?? envConfig.rpcUrl ?? this.rpcUrl;
+      this.chainId = this.options.chainId ?? envConfig.chainId ?? this.chainId;
+      this.tokenAddress =
+        (this.options.tokenAddress ?? envConfig.tokens?.IDRX ?? this.tokenAddress) as Address;
+      this.permit2Address =
+        (this.options.permit2Address ??
+          envConfig.permit2Address ??
+          this.permit2Address) as Address;
+      this.network = envConfig.network ?? this.network;
+
+      this.publicClient = createPublicClientForChain(this.rpcUrl, this.chainId);
+    } catch {
+      // Keep defaults and explicit overrides for local/dev resilience.
+    }
+  }
+
+  private async ensureConfigReady(): Promise<void> {
+    await this.configReady;
   }
 
   /**
@@ -147,14 +225,16 @@ export class TransX402Client {
    * Check Permit2 approval status for the connected wallet
    */
   async checkApproval(): Promise<{ approved: boolean; allowance: string }> {
+    await this.ensureConfigReady();
     if (!this.walletConnection || !this.publicClient) {
       throw new Error("Wallet not connected");
     }
 
     const result = await checkPermit2Approval(
       this.publicClient,
-      IDRX_CONTRACT,
-      this.walletConnection.address
+      this.tokenAddress,
+      this.walletConnection.address,
+      this.permit2Address
     );
 
     return {
@@ -167,6 +247,7 @@ export class TransX402Client {
    * Request Permit2 approval from the user
    */
   async requestApproval(): Promise<string> {
+    await this.ensureConfigReady();
     if (!this.walletConnection || !this.publicClient) {
       throw new Error("Wallet not connected");
     }
@@ -176,7 +257,11 @@ export class TransX402Client {
     try {
       const txHash = await requestPermit2Approval(
         this.walletConnection.provider,
-        IDRX_CONTRACT
+        this.tokenAddress,
+        this.permit2Address,
+        this.chainId,
+        undefined,
+        this.rpcUrl
       );
 
       return txHash;
@@ -197,6 +282,7 @@ export class TransX402Client {
     currency: string;
     resource?: string;
   }): Promise<PaymentResult> {
+    await this.ensureConfigReady();
     // Ensure wallet is connected
     let walletAddress = await this.isWalletConnected();
     if (!walletAddress) {
@@ -213,9 +299,10 @@ export class TransX402Client {
     // Check Permit2 approval
     const approved = await isAmountApproved(
       this.publicClient,
-      IDRX_CONTRACT,
+      this.tokenAddress,
       this.walletConnection.address,
-      BigInt(tokenAmount)
+      BigInt(tokenAmount),
+      this.permit2Address
     );
 
     if (!approved) {
@@ -234,7 +321,7 @@ export class TransX402Client {
     const nonce = generateNonce();
     const deadline = createDeadline();
     const message = createPermitMessage(
-      IDRX_CONTRACT,
+      this.tokenAddress,
       tokenAmount,
       requirements.to,
       nonce,
@@ -251,7 +338,7 @@ export class TransX402Client {
     const facilitateRequest = {
       permit: {
         permitted: {
-          token: IDRX_CONTRACT,
+          token: this.tokenAddress,
           amount: tokenAmount,
         },
         nonce,
@@ -288,7 +375,7 @@ export class TransX402Client {
       to: result.to,
       token: result.token,
       amount: requirements.amount,
-      network: "base",
+      network: this.network,
     };
 
     this.options.onPaymentSuccess?.(paymentResult);
