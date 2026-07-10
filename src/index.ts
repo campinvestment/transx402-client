@@ -7,8 +7,10 @@ import type {
 import {
   connectWallet,
   checkConnection,
+  ensureChain,
   WalletConnectionError,
   type WalletConnection,
+  type WalletChainConfig,
 } from "./wallet.js";
 import {
   checkPermit2Approval,
@@ -40,6 +42,7 @@ const DEFAULT_NETWORK_CONFIG = {
     tokenAddress: "0x18Bc5bcC660cf2B9cE3cd51a404aFe1a0cBD3C22",
     permit2Address: "0x000000000022D473030F116dDEE9F6B43aC78BA3",
     network: "sandbox",
+    nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
   },
   production: {
     rpcUrl: "https://mainnet.base.org",
@@ -47,6 +50,7 @@ const DEFAULT_NETWORK_CONFIG = {
     tokenAddress: "0x18Bc5bcC660cf2B9cE3cd51a404aFe1a0cBD3C22",
     permit2Address: "0x000000000022D473030F116dDEE9F6B43aC78BA3",
     network: "base",
+    nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
   },
 } as const;
 
@@ -57,6 +61,7 @@ interface FacilitatorConfigResponse {
     network: string;
     tokens?: { IDRX?: string };
     permit2Address?: string;
+    nativeCurrency?: WalletChainConfig["nativeCurrency"];
   };
   production?: {
     rpcUrl: string;
@@ -64,6 +69,7 @@ interface FacilitatorConfigResponse {
     network: string;
     tokens?: { IDRX?: string };
     permit2Address?: string;
+    nativeCurrency?: WalletChainConfig["nativeCurrency"];
   };
 }
 
@@ -128,6 +134,7 @@ export class TransX402Client {
   private tokenAddress: Address;
   private permit2Address: Address;
   private network: string;
+  private nativeCurrency: WalletChainConfig["nativeCurrency"];
   private configReady: Promise<void>;
 
   constructor(options: TransX402Options) {
@@ -145,6 +152,7 @@ export class TransX402Client {
     this.tokenAddress = (options.tokenAddress ?? defaults.tokenAddress) as Address;
     this.permit2Address = (options.permit2Address ?? defaults.permit2Address) as Address;
     this.network = defaults.network;
+    this.nativeCurrency = defaults.nativeCurrency;
     this.publicClient = createPublicClientForChain(this.rpcUrl, this.chainId);
     this.configReady = this.initializeConfig();
   }
@@ -175,6 +183,7 @@ export class TransX402Client {
           envConfig.permit2Address ??
           this.permit2Address) as Address;
       this.network = envConfig.network ?? this.network;
+      this.nativeCurrency = envConfig.nativeCurrency ?? this.nativeCurrency;
 
       this.publicClient = createPublicClientForChain(this.rpcUrl, this.chainId);
     } catch {
@@ -186,12 +195,25 @@ export class TransX402Client {
     await this.configReady;
   }
 
+  private async ensureWalletChain(): Promise<void> {
+    if (!this.walletConnection) return;
+
+    await ensureChain(this.walletConnection.provider, {
+      chainId: this.chainId,
+      chainName: this.network,
+      rpcUrl: this.rpcUrl,
+      nativeCurrency: this.nativeCurrency,
+    });
+  }
+
   /**
    * Connect or reconnect the wallet
    */
   async connectWallet(): Promise<string> {
     try {
+      await this.ensureConfigReady();
       this.walletConnection = await connectWallet();
+      await this.ensureWalletChain();
       const address = this.walletConnection.address;
       
       this.options.onWalletConnect?.(address);
@@ -229,6 +251,7 @@ export class TransX402Client {
     if (!this.walletConnection || !this.publicClient) {
       throw new Error("Wallet not connected");
     }
+    await this.ensureWalletChain();
 
     const result = await checkPermit2Approval(
       this.publicClient,
@@ -251,6 +274,7 @@ export class TransX402Client {
     if (!this.walletConnection || !this.publicClient) {
       throw new Error("Wallet not connected");
     }
+    await this.ensureWalletChain();
 
     this.options.onApprovalRequired?.();
 
@@ -292,6 +316,7 @@ export class TransX402Client {
     if (!this.walletConnection || !this.publicClient) {
       throw new Error("Failed to connect wallet");
     }
+    await this.ensureWalletChain();
 
     // Convert amount to IDRX base units
     const tokenAmount = toIDRXBaseUnits(requirements.amount);

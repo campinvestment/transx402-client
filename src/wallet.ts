@@ -21,6 +21,17 @@ export interface WalletConnection {
   chainId: number;
 }
 
+export interface WalletChainConfig {
+  chainId: number;
+  chainName: string;
+  rpcUrl: string;
+  nativeCurrency: {
+    name: string;
+    symbol: string;
+    decimals: number;
+  };
+}
+
 export class WalletConnectionError extends Error {
   constructor(
     public code: string,
@@ -89,23 +100,48 @@ export async function connectWallet(): Promise<WalletConnection> {
  */
 export async function switchChain(
   provider: EIP1193Provider,
-  chainId: number
+  config: WalletChainConfig
 ): Promise<void> {
   try {
     await provider.request({
       method: "wallet_switchEthereumChain",
-      params: [{ chainId: `0x${chainId.toString(16)}` }],
+      params: [{ chainId: `0x${config.chainId.toString(16)}` }],
     });
   } catch (err) {
     const error = err as { code?: number };
     // 4902 means the chain hasn't been added yet
     if (error.code === 4902) {
-      throw new WalletConnectionError(
-        "chain_not_added",
-        `Chain ${chainId} not added to wallet. Please add it manually.`
-      );
+      await provider.request({
+        method: "wallet_addEthereumChain",
+        params: [
+          {
+            chainId: `0x${config.chainId.toString(16)}`,
+            chainName: config.chainName,
+            rpcUrls: [config.rpcUrl],
+            nativeCurrency: config.nativeCurrency,
+          },
+        ],
+      });
+      await provider.request({
+        method: "wallet_switchEthereumChain",
+        params: [{ chainId: `0x${config.chainId.toString(16)}` }],
+      });
+      return;
     }
     throw err;
+  }
+}
+
+export async function ensureChain(
+  provider: EIP1193Provider,
+  config: WalletChainConfig
+): Promise<void> {
+  const currentChainId = (await provider.request({
+    method: "eth_chainId",
+  })) as string;
+
+  if (parseInt(currentChainId, 16) !== config.chainId) {
+    await switchChain(provider, config);
   }
 }
 
