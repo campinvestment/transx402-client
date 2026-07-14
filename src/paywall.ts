@@ -4,6 +4,8 @@ import type { TransX402Options, PaymentResult } from "./types.js";
 export interface PaywallOptions {
   /** API key from TransX402 dashboard */
   apiKey: string;
+  /** Facilitator API used to load the network configuration */
+  facilitatorUrl?: string;
   /** Element selector or HTMLElement to gate */
   selector: string | HTMLElement;
   /** Price in IDR */
@@ -62,6 +64,7 @@ export class Paywall {
 
     this.client = new TransX402Client({
       apiKey: this.options.apiKey,
+      facilitatorUrl: this.options.facilitatorUrl,
       onPaymentStart: () => {
         this.setState({ isProcessing: true, error: null });
         this.options.onPaymentStart?.();

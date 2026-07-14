@@ -19,6 +19,7 @@ import {
   createPublicClientForChain,
   Permit2Error,
 } from "./permit2.js";
+import { createPaywall, type PaywallOptions } from "./paywall.js";
 import type { Address, Hex } from "viem";
 
 export type {
@@ -461,6 +462,9 @@ export class TransX402Client {
 export const TransX402 = {
   create(options: TransX402Options): TransX402Client {
     return new TransX402Client(options);
+  },
+  paywall(options: PaywallOptions) {
+    return createPaywall(options);
   },
 };
 
