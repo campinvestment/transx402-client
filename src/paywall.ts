@@ -39,7 +39,7 @@ interface PaywallState {
   isOpen: boolean;
   isProcessing: boolean;
   error: string | null;
-  step: "connect" | "approve" | "pay" | "success";
+  step: "connect" | "pay" | "success";
 }
 
 export class Paywall {
@@ -79,10 +79,7 @@ export class Paywall {
         this.options.onPaymentError?.(error);
       },
       onWalletConnect: () => {
-        this.checkApproval();
-      },
-      onApprovalRequired: () => {
-        this.setState({ step: "approve" });
+        this.setState({ step: "pay" });
       },
     });
 
@@ -392,7 +389,6 @@ export class Paywall {
         <div class="transx402-modal-body">
           <div class="transx402-step-indicator">
             <div class="transx402-step ${this.state.step === "connect" ? "active" : ""}"></div>
-            <div class="transx402-step ${this.state.step === "approve" ? "active" : ""}"></div>
             <div class="transx402-step ${this.state.step === "pay" ? "active" : ""}"></div>
           </div>
           <div id="transx402-modal-content">
@@ -445,23 +441,6 @@ export class Paywall {
           </div>
         `;
 
-      case "approve":
-        return `
-          <div style="text-align: center;">
-            <div style="font-size: 3rem; margin-bottom: 1rem;">✅</div>
-            <p style="margin-bottom: 1rem; font-weight: 500;">
-              Approve IDRX for gasless payments
-            </p>
-            <p style="margin-bottom: 1.5rem; color: #64748b; font-size: 0.875rem;">
-              This is a one-time approval that allows us to process payments on your behalf. 
-              You only need to do this once per wallet.
-            </p>
-            <button class="transx402-paywall-button" id="transx402-approve-btn">
-              Approve IDRX
-            </button>
-          </div>
-        `;
-
       case "pay":
         return `
           <div style="text-align: center;">
@@ -470,7 +449,7 @@ export class Paywall {
               Rp ${this.options.price.toLocaleString("id-ID")}
             </p>
             <p style="margin-bottom: 1.5rem; color: #64748b;">
-              Click below to complete your payment
+              Sign the payment request to complete settlement
             </p>
             <button class="transx402-paywall-button" id="transx402-pay-btn">
               Pay Now
@@ -504,29 +483,11 @@ export class Paywall {
     const address = await this.client.isWalletConnected();
 
     if (address) {
-      // Check approval status
-      await this.checkApproval();
+      this.setState({ step: "pay" });
+      this.attachButtonListeners();
     } else {
       // Show connect step and wait for user
       this.attachButtonListeners();
-    }
-  }
-
-  private async checkApproval() {
-    try {
-      const { approved } = await this.client.checkApproval();
-
-      if (approved) {
-        this.setState({ step: "pay" });
-      } else {
-        this.setState({ step: "approve" });
-      }
-
-      this.attachButtonListeners();
-    } catch (err) {
-      this.setState({
-        error: err instanceof Error ? err.message : "Failed to check approval",
-      });
     }
   }
 
@@ -537,29 +498,11 @@ export class Paywall {
       connectBtn.addEventListener("click", async () => {
         try {
           await this.client.connectWallet();
-          // After connection, check approval
-          await this.checkApproval();
-        } catch (err) {
-          this.setState({
-            error: err instanceof Error ? err.message : "Failed to connect wallet",
-          });
-        }
-      });
-    }
-
-    // Approve button
-    const approveBtn = document.getElementById("transx402-approve-btn");
-    if (approveBtn) {
-      approveBtn.addEventListener("click", async () => {
-        this.setState({ isProcessing: true, error: null });
-        try {
-          await this.client.requestApproval();
-          this.setState({ isProcessing: false, step: "pay" });
+          this.setState({ step: "pay" });
           this.attachButtonListeners();
         } catch (err) {
           this.setState({
-            isProcessing: false,
-            error: err instanceof Error ? err.message : "Approval failed",
+            error: err instanceof Error ? err.message : "Failed to connect wallet",
           });
         }
       });
@@ -620,7 +563,7 @@ export class Paywall {
     // Update step indicators
     const steps = modal.querySelectorAll(".transx402-step");
     steps.forEach((step, index) => {
-      const stepNames: Array<PaywallState["step"]> = ["connect", "approve", "pay"];
+      const stepNames: Array<PaywallState["step"]> = ["connect", "pay"];
       if (stepNames[index] === this.state.step) {
         step.classList.add("active");
       } else {

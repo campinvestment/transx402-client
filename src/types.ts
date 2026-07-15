@@ -1,3 +1,17 @@
+import type {
+  Network as X402Network,
+  PaymentPayload as X402PaymentPayload,
+  PaymentRequired as X402PaymentRequired,
+  PaymentRequirements as X402PaymentRequirements,
+} from "@x402/fetch";
+
+export type {
+  X402Network,
+  X402PaymentPayload,
+  X402PaymentRequired,
+  X402PaymentRequirements,
+};
+
 export interface TransX402Options {
   apiKey: string;
   /** Override facilitator URL (auto-detected from apiKey prefix) */

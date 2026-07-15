@@ -3,6 +3,8 @@ import type {
   PaymentDetails,
   PaymentResult,
   PaymentRequirements,
+  X402PaymentPayload,
+  X402PaymentRequired,
 } from "./types.js";
 import {
   connectWallet,
@@ -15,12 +17,23 @@ import {
 import {
   checkPermit2Approval,
   requestPermit2Approval,
-  isAmountApproved,
   createPublicClientForChain,
   Permit2Error,
 } from "./permit2.js";
 import { createPaywall, type PaywallOptions } from "./paywall.js";
-import type { Address, Hex } from "viem";
+import {
+  createWalletClient,
+  custom,
+  defineChain,
+  type Address,
+} from "viem";
+import { x402Client, x402HTTPClient } from "@x402/fetch";
+import { ExactEvmScheme, toClientEvmSigner } from "@x402/evm";
+import { decodePaymentRequiredHeader, encodePaymentSignatureHeader } from "@x402/core/http";
+import {
+  declareEip2612GasSponsoringExtension,
+  declareErc20ApprovalGasSponsoringExtension,
+} from "@x402/extensions";
 
 export type {
   TransX402Options,
@@ -39,9 +52,9 @@ const FACILITATOR_URLS = {
 const DEFAULT_NETWORK_CONFIG = {
   sandbox: {
     rpcUrl: "http://localhost:8545",
-    chainId: 8453,
-    tokenAddress: "0x18Bc5bcC660cf2B9cE3cd51a404aFe1a0cBD3C22",
-    permit2Address: "0x000000000022D473030F116dDEE9F6B43aC78BA3",
+    chainId: 1337,
+    tokenAddress: "0xBDc7a77b5D1A036Ba057358e4156b3646c5c1211",
+    permit2Address: "0xbD9Ef36F3587D5e8b57b3F8a1AE3A327bD538fbA",
     network: "sandbox",
     nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
   },
@@ -90,39 +103,6 @@ function toIDRXBaseUnits(idrAmount: string): string {
   return (BigInt(idrAmount) * 100n).toString();
 }
 
-/**
- * Generate a nonce for Permit2
- */
-function generateNonce(): string {
-  return BigInt(Date.now() * 1000 + Math.floor(Math.random() * 1000)).toString();
-}
-
-/**
- * Create deadline 1 hour from now
- */
-function createDeadline(): string {
-  return (Math.floor(Date.now() / 1000) + 3600).toString();
-}
-
-/**
- * Create SIWE message for signing
- */
-function createPermitMessage(
-  token: string,
-  amount: string,
-  to: string,
-  nonce: string,
-  deadline: string
-): string {
-  return JSON.stringify({
-    token,
-    amount,
-    to,
-    nonce,
-    deadline,
-  });
-}
-
 export class TransX402Client {
   private apiKey: string;
   private environment: "sandbox" | "production";
@@ -137,6 +117,7 @@ export class TransX402Client {
   private network: string;
   private nativeCurrency: WalletChainConfig["nativeCurrency"];
   private configReady: Promise<void>;
+  private httpPaymentClient: x402HTTPClient | null = null;
 
   constructor(options: TransX402Options) {
     this.options = options;
@@ -216,9 +197,10 @@ export class TransX402Client {
       this.walletConnection = await connectWallet();
       await this.ensureWalletChain();
       const address = this.walletConnection.address;
-      
+      this.httpPaymentClient = null;
+
       this.options.onWalletConnect?.(address);
-      
+
       return address;
     } catch (err) {
       if (err instanceof WalletConnectionError) {
@@ -235,12 +217,22 @@ export class TransX402Client {
     if (!this.walletConnection) {
       return null;
     }
-    
+
     const address = await checkConnection(this.walletConnection.provider);
     if (!address) {
       this.walletConnection = null;
+      this.httpPaymentClient = null;
+      return null;
     }
-    
+
+    if (address.toLowerCase() !== this.walletConnection.address.toLowerCase()) {
+      this.walletConnection = {
+        ...this.walletConnection,
+        address,
+      };
+      this.httpPaymentClient = null;
+    }
+
     return address;
   }
 
@@ -298,6 +290,121 @@ export class TransX402Client {
     }
   }
 
+  private async getHttpPaymentClient(): Promise<x402HTTPClient> {
+    await this.ensureConfigReady();
+    if (!this.walletConnection || !this.publicClient) {
+      throw new Error("Wallet not connected");
+    }
+    await this.ensureWalletChain();
+    if (this.httpPaymentClient) return this.httpPaymentClient;
+
+    const chain = defineChain({
+      id: this.chainId,
+      name: this.network,
+      nativeCurrency: this.nativeCurrency,
+      rpcUrls: { default: { http: [this.rpcUrl] } },
+    });
+
+    const walletClient = createWalletClient({
+      chain,
+      transport: custom(this.walletConnection.provider),
+    });
+
+    const signer = toClientEvmSigner(
+      {
+        address: this.walletConnection.address,
+        signTypedData: (args) =>
+          walletClient.signTypedData({
+            ...args,
+            account: this.walletConnection!.address,
+          }),
+        signTransaction: (args) =>
+          walletClient.signTransaction({
+            ...args,
+            account: this.walletConnection!.address,
+          }),
+      },
+      {
+        readContract: (args) => this.publicClient!.readContract(args as never),
+        getTransactionCount: ({ address }) =>
+          this.publicClient!.getTransactionCount({ address }),
+        estimateFeesPerGas: () => this.publicClient!.estimateFeesPerGas(),
+      }
+    );
+
+    const paymentClient = new x402Client().register(
+      `eip155:${this.chainId}`,
+      new ExactEvmScheme(signer)
+    );
+
+    this.httpPaymentClient = new x402HTTPClient(paymentClient);
+    return this.httpPaymentClient;
+  }
+
+  private async settleWithFacilitator(paymentPayload: X402PaymentPayload): Promise<{
+    txHash: string | null;
+    settlement?: Record<string, unknown>;
+  }> {
+    const response = await fetch(`${this.facilitatorUrl}/facilitate`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-API-Key": this.apiKey,
+      },
+      body: JSON.stringify({
+        paymentPayload,
+        paymentRequirements: paymentPayload.accepted,
+      }),
+    });
+
+    if (!response.ok) {
+      const error = await response
+        .json()
+        .catch(() => ({ error: { message: "Payment facilitation failed" } }));
+      throw new Error(error.error?.message || "Payment facilitation failed");
+    }
+
+    const result = (await response.json()) as {
+      txHash?: string;
+      settlement?: Record<string, unknown> & { transaction?: string };
+    };
+
+    return {
+      txHash: result.txHash ?? result.settlement?.transaction ?? null,
+      settlement: result.settlement,
+    };
+  }
+
+  private buildFallbackPaymentRequired(requirements: {
+    to: string;
+    amount: string;
+    resource?: string;
+  }): X402PaymentRequired {
+    return {
+      x402Version: 2,
+      resource: { url: requirements.resource ?? "about:blank" },
+      accepts: [
+        {
+          scheme: "exact",
+          network: `eip155:${this.chainId}`,
+          asset: this.tokenAddress,
+          amount: toIDRXBaseUnits(requirements.amount),
+          payTo: requirements.to,
+          maxTimeoutSeconds: 60,
+          extra: {
+            assetTransferMethod: "permit2",
+            name: "IDRX",
+            version: "1",
+          },
+        },
+      ],
+      extensions: {
+        ...declareEip2612GasSponsoringExtension(),
+        ...declareErc20ApprovalGasSponsoringExtension(),
+      },
+    };
+  }
+
   /**
    * Execute a payment directly
    */
@@ -319,23 +426,6 @@ export class TransX402Client {
     }
     await this.ensureWalletChain();
 
-    // Convert amount to IDRX base units
-    const tokenAmount = toIDRXBaseUnits(requirements.amount);
-
-    // Check Permit2 approval
-    const approved = await isAmountApproved(
-      this.publicClient,
-      this.tokenAddress,
-      this.walletConnection.address,
-      BigInt(tokenAmount),
-      this.permit2Address
-    );
-
-    if (!approved) {
-      this.options.onApprovalRequired?.();
-      await this.requestApproval();
-    }
-
     this.options.onPaymentStart?.({
       to: requirements.to,
       amount: requirements.amount,
@@ -343,63 +433,20 @@ export class TransX402Client {
       resource: requirements.resource,
     });
 
-    // Generate permit data
-    const nonce = generateNonce();
-    const deadline = createDeadline();
-    const message = createPermitMessage(
-      this.tokenAddress,
-      tokenAmount,
-      requirements.to,
-      nonce,
-      deadline
-    );
-
-    // Sign the permit message
-    const signature = await this.walletConnection.provider.request({
-      method: "personal_sign",
-      params: [message, this.walletConnection.address],
-    }) as Hex;
-
-    // Submit to facilitator
-    const facilitateRequest = {
-      permit: {
-        permitted: {
-          token: this.tokenAddress,
-          amount: tokenAmount,
-        },
-        nonce,
-        deadline,
-      },
-      transferDetails: {
-        to: requirements.to,
-        requestedAmount: tokenAmount,
-      },
-      owner: this.walletConnection.address,
-      signature,
+    const paymentRequired = this.buildFallbackPaymentRequired({
+      to: requirements.to,
+      amount: requirements.amount,
       resource: requirements.resource,
-    };
-
-    const response = await fetch(`${this.facilitatorUrl}/facilitate`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-API-Key": this.apiKey,
-      },
-      body: JSON.stringify(facilitateRequest),
     });
-
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.error?.message || "Payment facilitation failed");
-    }
-
-    const result = await response.json();
+    const paymentClient = await this.getHttpPaymentClient();
+    const paymentPayload = await paymentClient.createPaymentPayload(paymentRequired);
+    const settlement = await this.settleWithFacilitator(paymentPayload);
 
     const paymentResult: PaymentResult = {
-      txHash: result.txHash,
-      from: result.from,
-      to: result.to,
-      token: result.token,
+      txHash: settlement.txHash ?? "",
+      from: this.walletConnection.address,
+      to: requirements.to,
+      token: "IDRX",
       amount: requirements.amount,
       network: this.network,
     };
@@ -420,39 +467,59 @@ export class TransX402Client {
       return response;
     }
 
-    // Parse payment requirements from 402 response
-    const requirements = await this.parsePaymentRequirements(response);
-    if (!requirements) {
+    const paymentRequired = await this.parseX402PaymentRequired(response, url);
+    if (!paymentRequired) {
       return response;
     }
 
-    // Execute payment
-    const result = await this.pay({
-      to: requirements.to,
-      amount: requirements.amount,
-      currency: requirements.currency,
-      resource: url,
-    });
+    const paymentClient = await this.getHttpPaymentClient();
+    const paymentPayload = await paymentClient.createPaymentPayload(paymentRequired);
+    await this.settleWithFacilitator(paymentPayload);
 
-    // Retry the original request with payment proof
-    // The server should recognize the payment and return the content
+    const paymentSignature = encodePaymentSignatureHeader(paymentPayload);
+    const retryHeaders = new Headers(init?.headers);
+    retryHeaders.set("PAYMENT-SIGNATURE", paymentSignature);
+    retryHeaders.set("X-PAYMENT", paymentSignature);
+
     const retryInit: RequestInit = {
       ...init,
-      headers: {
-        ...init?.headers,
-        "X-Payment-Hash": result.txHash,
-      },
+      headers: retryHeaders,
     };
 
     return fetch(url, retryInit);
   }
 
-  private async parsePaymentRequirements(
-    response: Response
-  ): Promise<PaymentRequirements | null> {
+  private async parseX402PaymentRequired(
+    response: Response,
+    requestUrl: string
+  ): Promise<X402PaymentRequired | null> {
+    const paymentRequiredHeader =
+      response.headers.get("PAYMENT-REQUIRED") ??
+      response.headers.get("X-PAYMENT-REQUIRED");
+
+    if (paymentRequiredHeader) {
+      try {
+        return decodePaymentRequiredHeader(paymentRequiredHeader);
+      } catch {
+        // fall through to body parsing
+      }
+    }
+
     try {
       const body = await response.json();
-      return body as PaymentRequirements;
+      if (body && typeof body === "object" && "accepts" in body) {
+        return body as X402PaymentRequired;
+      }
+
+      const legacy = body as PaymentRequirements;
+      if (legacy?.to && legacy?.amount) {
+        return this.buildFallbackPaymentRequired({
+          to: legacy.to,
+          amount: legacy.amount,
+          resource: legacy.resource ?? requestUrl,
+        });
+      }
+      return null;
     } catch {
       return null;
     }
