@@ -1,10 +1,17 @@
-import { TransX402Client } from "./index.js";
-import type { TransX402Options, PaymentResult } from "./types.js";
+import { createBrowserClient, type BrowserClient } from "./browser/browser-client.js";
+import type { PaymentResult, TransX402Environment } from "./types.js";
 
 export interface PaywallOptions {
   /** API key from TransX402 dashboard */
   apiKey: string;
-  /** Facilitator API used to load the network configuration */
+  /**
+   * Named environment (`local` | `camp` | `base`).
+   * Mutually exclusive with `facilitatorUrl`.
+   */
+  environment?: TransX402Environment;
+  /**
+   * Advanced: custom facilitator. Mutually exclusive with `environment`.
+   */
   facilitatorUrl?: string;
   /** Element selector or HTMLElement to gate */
   selector: string | HTMLElement;
@@ -42,11 +49,49 @@ interface PaywallState {
   step: "connect" | "pay" | "success";
 }
 
+function buildClientOptions(options: PaywallOptions) {
+  const base = {
+    apiKey: options.apiKey,
+    onPaymentStart: () => {
+      /* set by Paywall */
+    },
+    onPaymentSuccess: (_result: PaymentResult) => {
+      /* set by Paywall */
+    },
+    onPaymentError: (_error: Error) => {
+      /* set by Paywall */
+    },
+    onWalletConnect: () => {
+      /* set by Paywall */
+    },
+  };
+
+  if (options.environment != null && options.facilitatorUrl != null) {
+    throw new Error(
+      "Set either `environment` or `facilitatorUrl`, not both."
+    );
+  }
+
+  if (options.environment != null) {
+    return { ...base, environment: options.environment } as const;
+  }
+
+  if (options.facilitatorUrl != null) {
+    return { ...base, facilitatorUrl: options.facilitatorUrl } as const;
+  }
+
+  throw new Error(
+    "Set `environment` (\"local\" | \"camp\" | \"base\") or `facilitatorUrl`."
+  );
+}
+
 export class Paywall {
   private options: PaywallOptions;
-  private client: TransX402Client;
+  private client: BrowserClient;
   private targetElement: HTMLElement | null = null;
   private overlayElement: HTMLElement | null = null;
+  private modalElement: HTMLElement | null = null;
+  private paymentInFlight = false;
   private state: PaywallState = {
     isOpen: false,
     isProcessing: false,
@@ -62,9 +107,10 @@ export class Paywall {
       ...options,
     };
 
-    this.client = new TransX402Client({
-      apiKey: this.options.apiKey,
-      facilitatorUrl: this.options.facilitatorUrl,
+    const clientOptions = buildClientOptions(this.options);
+
+    this.client = createBrowserClient({
+      ...clientOptions,
       onPaymentStart: () => {
         this.setState({ isProcessing: true, error: null });
         this.options.onPaymentStart?.();
@@ -87,7 +133,6 @@ export class Paywall {
   }
 
   private init() {
-    // Get target element
     if (typeof this.options.selector === "string") {
       this.targetElement = document.querySelector(this.options.selector);
     } else {
@@ -99,31 +144,26 @@ export class Paywall {
       return;
     }
 
-    // Lock the content
     this.lockContent();
   }
 
   private lockContent() {
     if (!this.targetElement) return;
 
-    // Add blur effect and pointer events prevention
     this.targetElement.style.filter = "blur(8px)";
     this.targetElement.style.pointerEvents = "none";
     this.targetElement.style.userSelect = "none";
 
-    // Create overlay with paywall button
     this.createOverlay();
   }
 
   private unlockContent() {
     if (!this.targetElement) return;
 
-    // Remove blur and restrictions
     this.targetElement.style.filter = "";
     this.targetElement.style.pointerEvents = "";
     this.targetElement.style.userSelect = "";
 
-    // Remove overlay
     if (this.overlayElement && this.overlayElement.parentNode) {
       this.overlayElement.parentNode.removeChild(this.overlayElement);
     }
@@ -139,7 +179,7 @@ export class Paywall {
         <div class="transx402-paywall-icon">🔒</div>
         <h3 class="transx402-paywall-title">${this.options.title}</h3>
         <p class="transx402-paywall-description">${this.options.description}</p>
-        <button class="transx402-paywall-button" onclick="this.closest('.transx402-paywall-overlay').dispatchEvent(new CustomEvent('paywall:open'))">
+        <button type="button" class="transx402-paywall-button" onclick="event.stopPropagation(); this.closest('.transx402-paywall-overlay').dispatchEvent(new CustomEvent('paywall:open'))">
           <span class="transx402-paywall-button-text">Pay with IDRX</span>
           <span class="transx402-paywall-button-price">Rp ${this.options.price.toLocaleString("id-ID")}</span>
         </button>
@@ -147,7 +187,6 @@ export class Paywall {
       </div>
     `;
 
-    // Add styles
     const theme = this.options.theme || {};
     overlay.style.cssText = `
       position: absolute;
@@ -163,10 +202,8 @@ export class Paywall {
       cursor: pointer;
     `;
 
-    // Add CSS if not already added
     this.injectStyles(theme);
 
-    // Position the overlay
     const parent = this.targetElement.parentElement;
     if (parent) {
       parent.style.position = "relative";
@@ -175,8 +212,10 @@ export class Paywall {
 
     this.overlayElement = overlay;
 
-    // Listen for click
-    overlay.addEventListener("click", () => this.open());
+    overlay.addEventListener("click", (event) => {
+      if (event.target !== overlay) return;
+      this.open();
+    });
     overlay.addEventListener("paywall:open", () => this.open());
   }
 
@@ -270,7 +309,6 @@ export class Paywall {
         margin: 1rem 0 0 0;
       }
 
-      /* Modal styles */
       .transx402-modal-overlay {
         position: fixed;
         top: 0;
@@ -368,14 +406,11 @@ export class Paywall {
   private async open() {
     if (this.state.isOpen) return;
 
-    this.setState({ isOpen: true, error: null });
-
-    // Create modal
     const modal = this.createModal();
     document.body.appendChild(modal);
+    this.setState({ isOpen: true, error: null });
 
-    // Start the flow
-    this.startPaymentFlow();
+    await this.startPaymentFlow();
   }
 
   private createModal(): HTMLElement {
@@ -398,21 +433,86 @@ export class Paywall {
       </div>
     `;
 
-    // Close on overlay click
-    overlay.addEventListener("click", (e) => {
-      if (e.target === overlay) {
-        this.close();
-      }
-    });
-
+    overlay.addEventListener("click", (event) => this.handleModalClick(event));
+    this.modalElement = overlay;
     return overlay;
+  }
+
+  private handleModalClick(event: Event) {
+    const target = event.target;
+    if (!(target instanceof Element)) return;
+
+    if (target.closest("#transx402-connect-btn")) {
+      event.preventDefault();
+      void this.handleConnect();
+      return;
+    }
+
+    if (target.closest("#transx402-pay-btn")) {
+      event.preventDefault();
+      void this.handlePay();
+      return;
+    }
+
+    if (target.closest("#transx402-close-btn")) {
+      event.preventDefault();
+      this.close();
+      return;
+    }
+
+    if (target.closest("#transx402-retry-btn")) {
+      event.preventDefault();
+      this.setState({ error: null });
+      void this.startPaymentFlow();
+      return;
+    }
+
+    if (target === this.modalElement) {
+      this.close();
+    }
+  }
+
+  private async handleConnect() {
+    if (this.state.isProcessing || this.paymentInFlight) return;
+
+    try {
+      await this.client.connectWallet();
+      this.setState({ step: "pay" });
+    } catch (err) {
+      this.setState({
+        error: err instanceof Error ? err.message : "Failed to connect wallet",
+      });
+    }
+  }
+
+  private async handlePay() {
+    if (this.paymentInFlight || this.state.isProcessing) return;
+
+    this.paymentInFlight = true;
+    this.setState({ isProcessing: true, error: null });
+
+    try {
+      await this.client.pay({
+        to: this.options.merchantWallet,
+        amount: this.options.price.toString(),
+        currency: this.options.currency || "IDR",
+        resource: this.options.resource,
+      });
+    } catch (err) {
+      this.setState({
+        isProcessing: false,
+        error: err instanceof Error ? err.message : "Payment failed",
+      });
+    } finally {
+      this.paymentInFlight = false;
+    }
   }
 
   private renderModalContent(): string {
     if (this.state.error) {
       return `
         <div class="transx402-error">${this.state.error}</div>
-        <button class="transx402-paywall-button" onclick="this.closest('.transx402-modal-overlay').querySelector('#retry-button').click()">
+        <button type="button" class="transx402-paywall-button" id="transx402-retry-btn">
           Try Again
         </button>
       `;
@@ -479,69 +579,10 @@ export class Paywall {
   }
 
   private async startPaymentFlow() {
-    // Check if wallet is already connected
     const address = await this.client.isWalletConnected();
 
     if (address) {
       this.setState({ step: "pay" });
-      this.attachButtonListeners();
-    } else {
-      // Show connect step and wait for user
-      this.attachButtonListeners();
-    }
-  }
-
-  private attachButtonListeners() {
-    // Connect button
-    const connectBtn = document.getElementById("transx402-connect-btn");
-    if (connectBtn) {
-      connectBtn.addEventListener("click", async () => {
-        try {
-          await this.client.connectWallet();
-          this.setState({ step: "pay" });
-          this.attachButtonListeners();
-        } catch (err) {
-          this.setState({
-            error: err instanceof Error ? err.message : "Failed to connect wallet",
-          });
-        }
-      });
-    }
-
-    // Pay button
-    const payBtn = document.getElementById("transx402-pay-btn");
-    if (payBtn) {
-      payBtn.addEventListener("click", async () => {
-        this.setState({ isProcessing: true, error: null });
-        try {
-          await this.client.pay({
-            to: this.options.merchantWallet,
-            amount: this.options.price.toString(),
-            currency: this.options.currency || "IDR",
-            resource: this.options.resource,
-          });
-        } catch (err) {
-          this.setState({
-            isProcessing: false,
-            error: err instanceof Error ? err.message : "Payment failed",
-          });
-        }
-      });
-    }
-
-    // Close button
-    const closeBtn = document.getElementById("transx402-close-btn");
-    if (closeBtn) {
-      closeBtn.addEventListener("click", () => this.close());
-    }
-
-    // Retry button
-    const retryBtn = document.getElementById("transx402-retry-btn");
-    if (retryBtn) {
-      retryBtn.addEventListener("click", () => {
-        this.setState({ error: null });
-        this.startPaymentFlow();
-      });
     }
   }
 
@@ -557,10 +598,8 @@ export class Paywall {
     const content = modal.querySelector("#transx402-modal-content");
     if (content) {
       content.innerHTML = this.renderModalContent();
-      this.attachButtonListeners();
     }
 
-    // Update step indicators
     const steps = modal.querySelectorAll(".transx402-step");
     steps.forEach((step, index) => {
       const stepNames: Array<PaywallState["step"]> = ["connect", "pay"];
@@ -574,20 +613,19 @@ export class Paywall {
 
   private close() {
     this.setState({ isOpen: false });
-    const modal = document.querySelector(".transx402-modal-overlay");
+    const modal = this.modalElement ?? document.querySelector(".transx402-modal-overlay");
     if (modal && modal.parentNode) {
       modal.parentNode.removeChild(modal);
     }
+    this.modalElement = null;
   }
 
-  /** Public API to manually destroy the paywall */
   destroy() {
     this.unlockContent();
     this.close();
   }
 }
 
-/** Factory function for creating paywall */
 export function createPaywall(options: PaywallOptions): Paywall {
   return new Paywall(options);
 }
