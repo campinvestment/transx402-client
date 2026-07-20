@@ -83,11 +83,14 @@ describe("AgentClient Path 3", () => {
   });
 
   test("wires signTransaction on Path 3 signer", async () => {
+    stubSandboxConfig();
+
     const client = createAgentClient({
       apiKey: "ipk_sandbox_test",
       facilitatorUrl: "http://localhost:3402",
       privateKey: ANVIL_KEY,
     });
+    await (client as any).ensureConfigReady();
     expect(client).toBeInstanceOf(AgentClient);
 
     const dir = dirname(fileURLToPath(import.meta.url));
