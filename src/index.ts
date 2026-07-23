@@ -22,7 +22,13 @@ export type {
 } from "./types.js";
 
 export { WalletConnectionError } from "./wallet.js";
-export { Permit2Error } from "./permit2.js";
+export {
+  Permit2Error,
+  DEFAULT_PERMIT2_APPROVAL_AMOUNT,
+  UNLIMITED_PERMIT2_APPROVAL_AMOUNT,
+  defaultPermit2ApprovalAmount,
+  readErc20TokenMeta,
+} from "./permit2.js";
 
 export {
   FACILITATOR_PRESETS,

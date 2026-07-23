@@ -250,6 +250,13 @@ describe("BrowserClient Path 4", () => {
     });
 
     expect(approveSpy).toHaveBeenCalled();
+    expect(approveSpy.mock.calls[0][4]).toBe(
+      permit2.UNLIMITED_PERMIT2_APPROVAL_AMOUNT
+    );
+    expect(approveSpy.mock.calls[0][5]).toEqual({
+      symbol: "IDRX",
+      decimals: 2,
+    });
   });
 
   test("getHttpPaymentClient signer has no signTransaction", async () => {

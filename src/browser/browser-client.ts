@@ -9,14 +9,18 @@ import {
   connectWallet,
   checkConnection,
   ensureChain,
+  watchErc20Asset,
   WalletConnectionError,
   type WalletConnection,
+  type WalletChainConfig,
 } from "../wallet.js";
 import {
   checkPermit2Approval,
   requestPermit2Approval,
   createPublicClientForChain,
+  readErc20TokenMeta,
   Permit2Error,
+  defaultPermit2ApprovalAmount,
 } from "../permit2.js";
 import {
   createWalletClient,
@@ -101,11 +105,52 @@ export class BrowserClient {
     });
   }
 
+  private walletChainConfig(cfg: NetworkConfig): WalletChainConfig {
+    return {
+      chainId: cfg.chainId,
+      chainName: cfg.network,
+      rpcUrl: cfg.rpcUrl,
+      nativeCurrency: cfg.nativeCurrency,
+    };
+  }
+
+  /** Register sandbox IDRX in MetaMask so approve Spending Cap shows a decimal amount. */
+  private async ensurePaymentTokenInWallet(cfg: NetworkConfig): Promise<void> {
+    if (!this.walletConnection || !this.publicClient) return;
+
+    await ensureChain(
+      this.walletConnection.provider,
+      this.walletChainConfig(cfg)
+    );
+
+    const onChainMeta = await readErc20TokenMeta(
+      this.publicClient,
+      cfg.tokenAddress
+    );
+    const decimals = onChainMeta?.decimals ?? cfg.tokenDecimals;
+    const symbol = onChainMeta?.symbol ?? "IDRX";
+
+    const added = await watchErc20Asset(this.walletConnection.provider, {
+      address: cfg.tokenAddress,
+      symbol,
+      decimals,
+      chainId: cfg.chainId,
+    });
+
+    if (!added) {
+      throw new WalletConnectionError(
+        "token_not_added",
+        "Add IDRX to MetaMask when prompted. This sandbox token must be in your wallet before approving Permit2."
+      );
+    }
+  }
+
   async connectWallet(): Promise<string> {
     try {
-      await this.ensureConfigReady();
+      const cfg = await this.ensureConfigReady();
       this.walletConnection = await connectWallet();
       await this.ensureWalletChain();
+      await this.ensurePaymentTokenInWallet(cfg);
       const address = this.walletConnection.address;
       this.httpPaymentClient = null;
 
@@ -181,9 +226,10 @@ export class BrowserClient {
         this.walletConnection.provider,
         cfg.tokenAddress,
         cfg.permit2Address,
-        cfg.chainId,
-        undefined,
-        cfg.rpcUrl
+        this.walletChainConfig(cfg),
+        defaultPermit2ApprovalAmount(cfg.tokenDecimals),
+        { symbol: "IDRX", decimals: cfg.tokenDecimals },
+        this.publicClient
       );
     } catch (err) {
       if (err instanceof Permit2Error) {
@@ -214,14 +260,17 @@ export class BrowserClient {
 
     if (!needs) return;
 
+    await this.ensureWalletChain();
+
     this.options.onApprovalRequired?.();
     await requestPermit2Approval(
       this.walletConnection.provider,
       cfg.tokenAddress,
       cfg.permit2Address,
-      cfg.chainId,
-      undefined,
-      cfg.rpcUrl
+      this.walletChainConfig(cfg),
+      defaultPermit2ApprovalAmount(cfg.tokenDecimals),
+      { symbol: "IDRX", decimals: cfg.tokenDecimals },
+      this.publicClient
     );
   }
 
@@ -388,14 +437,16 @@ export class BrowserClient {
         amount
       );
       if (needsApprove) {
+        await this.ensureWalletChain();
         this.options.onApprovalRequired?.();
         await requestPermit2Approval(
           this.walletConnection.provider,
           cfg.tokenAddress,
           cfg.permit2Address,
-          cfg.chainId,
-          undefined,
-          cfg.rpcUrl
+          this.walletChainConfig(cfg),
+          defaultPermit2ApprovalAmount(cfg.tokenDecimals),
+          { symbol: "IDRX", decimals: cfg.tokenDecimals },
+          this.publicClient
         );
       }
     }

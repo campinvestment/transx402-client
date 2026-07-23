@@ -3,13 +3,16 @@ import {
   createWalletClient,
   custom,
   defineChain,
+  getAddress,
   http,
+  maxUint256,
   parseAbi,
   type Address,
   type Chain,
   type Hex,
 } from "viem";
-import type { EIP1193Provider } from "./wallet.js";
+import type { EIP1193Provider, WalletChainConfig } from "./wallet.js";
+import { ensureChain, watchErc20Asset } from "./wallet.js";
 
 const ERC20_ABI = parseAbi([
   "function allowance(address owner, address spender) external view returns (uint256)",
@@ -20,6 +23,50 @@ const PERMIT2_ABI = parseAbi([
   "function allowance(address owner, address token, address spender) external view returns (uint160 amount, uint48 expiration, uint48 nonce)",
 ]);
 
+const ERC20_METADATA_ABI = parseAbi([
+  "function decimals() view returns (uint8)",
+  "function symbol() view returns (string)",
+]);
+
+/**
+ * Unlimited ERC-20 approve to Permit2 (Uniswap / Permit2 standard).
+ * MetaMask treats Permit2 as a trusted spender and shows "Unlimited" more
+ * reliably than a finite cap on custom chains (CAMP sandbox).
+ */
+export const DEFAULT_PERMIT2_APPROVAL_AMOUNT = maxUint256;
+
+/** Explicit max uint256 for integrators who want unlimited approve. */
+export const UNLIMITED_PERMIT2_APPROVAL_AMOUNT = maxUint256;
+
+/** Build approve amount for Permit2 — always unlimited. */
+export function defaultPermit2ApprovalAmount(_decimals = 2): bigint {
+  return UNLIMITED_PERMIT2_APPROVAL_AMOUNT;
+}
+
+/** Read token metadata from chain so MetaMask watchAsset uses verified decimals. */
+export async function readErc20TokenMeta(
+  publicClient: ReturnType<typeof createPublicClientForChain>,
+  token: Address
+): Promise<{ symbol: string; decimals: number } | null> {
+  try {
+    const checksummed = getAddress(token);
+    const [decimals, symbol] = await Promise.all([
+      publicClient.readContract({
+        address: checksummed,
+        abi: ERC20_METADATA_ABI,
+        functionName: "decimals",
+      }),
+      publicClient.readContract({
+        address: checksummed,
+        abi: ERC20_METADATA_ABI,
+        functionName: "symbol",
+      }),
+    ]);
+    return { decimals: Number(decimals), symbol: String(symbol) };
+  } catch {
+    return null;
+  }
+}
 export interface Permit2Approval {
   approved: boolean;
   allowance: bigint;
@@ -103,23 +150,47 @@ export async function checkPermit2Approval(
 }
 
 /**
- * Request ERC20 approval for Permit2 contract
+ * Request ERC20 approval for Permit2 contract.
+ * Registers the token with MetaMask first (wallet_watchAsset) so Spending Cap
+ * shows a human decimal amount instead of hex / the Permit2 spender address.
  */
 export async function requestPermit2Approval(
   provider: EIP1193Provider,
   token: Address,
   permit2Address: Address,
-  chainId: number,
-  amount: bigint = BigInt("115792089237316195423570985008687907853269984665640564039457584007913129639935"), // max uint256
-  rpcUrl?: string
+  chainConfig: WalletChainConfig,
+  amount: bigint = UNLIMITED_PERMIT2_APPROVAL_AMOUNT,
+  tokenMeta?: { symbol?: string; decimals?: number },
+  publicClient?: ReturnType<typeof createPublicClientForChain>
 ): Promise<Hex> {
   try {
-    const effectiveRpcUrl = rpcUrl ?? "https://mainnet.base.org";
+    const tokenAddress = getAddress(token);
+    const spender = getAddress(permit2Address);
+    const rpcClient =
+      publicClient ??
+      createPublicClientForChain(chainConfig.rpcUrl, chainConfig.chainId);
+
+    const onChainMeta = await readErc20TokenMeta(rpcClient, tokenAddress);
+    const decimals = onChainMeta?.decimals ?? tokenMeta?.decimals ?? 2;
+    const symbol = onChainMeta?.symbol ?? tokenMeta?.symbol ?? "IDRX";
+
+    await ensureChain(provider, chainConfig);
+
+    await watchErc20Asset(provider, {
+      address: tokenAddress,
+      symbol,
+      decimals,
+      chainId: chainConfig.chainId,
+    });
+
+    // Let MetaMask index the token before simulating approve on custom chains.
+    await new Promise((resolve) => setTimeout(resolve, 400));
+
     const chain: Chain = defineChain({
-      id: chainId,
-      name: `transx-${chainId}`,
-      nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
-      rpcUrls: { default: { http: [effectiveRpcUrl] } },
+      id: chainConfig.chainId,
+      name: chainConfig.chainName,
+      nativeCurrency: chainConfig.nativeCurrency,
+      rpcUrls: { default: { http: [chainConfig.rpcUrl] } },
     });
 
     // Create wallet client with custom provider
@@ -139,21 +210,17 @@ export async function requestPermit2Approval(
 
     const account = accounts[0];
 
-    // Send approval transaction
+    // Send approval transaction: approve(spender=Permit2, amount=human decimal units)
     const hash = await walletClient.writeContract({
       account,
-      address: token,
+      address: tokenAddress,
       abi: ERC20_ABI,
       functionName: "approve",
-      args: [permit2Address, amount],
+      args: [spender, amount],
       chain,
     });
 
-    // Wait for the transaction to be mined
-    if (rpcUrl) {
-      const publicClient = createPublicClientForChain(rpcUrl, chainId);
-      await publicClient.waitForTransactionReceipt({ hash });
-    }
+    await rpcClient.waitForTransactionReceipt({ hash });
 
     return hash;
   } catch (err) {

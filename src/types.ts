@@ -1,15 +1,15 @@
 import type {
-  Network as X402Network,
-  PaymentPayload as X402PaymentPayload,
-  PaymentRequired as X402PaymentRequired,
-  PaymentRequirements as X402PaymentRequirements,
+    Network as X402Network,
+    PaymentPayload as X402PaymentPayload,
+    PaymentRequired as X402PaymentRequired,
+    PaymentRequirements as X402PaymentRequirements,
 } from "@x402/fetch";
 
 export type {
-  X402Network,
-  X402PaymentPayload,
-  X402PaymentRequired,
-  X402PaymentRequirements,
+    X402Network,
+    X402PaymentPayload,
+    X402PaymentRequired,
+    X402PaymentRequirements
 };
 
 /** Named deployment targets. Chain params always come from GET /config. */
@@ -70,6 +70,8 @@ export interface NetworkConfig {
   chainId: number;
   network: string;
   tokenAddress: `0x${string}`;
+  /** ERC-20 decimals for IDRX (from GET /config). Used for MetaMask spending-cap display. */
+  tokenDecimals: number;
   permit2Address: `0x${string}`;
   sponsorshipMode: SponsorshipMode;
   nativeCurrency: {

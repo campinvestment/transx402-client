@@ -1,9 +1,10 @@
 import type { Address, Hex } from "viem";
+import { getAddress } from "viem";
 
 export interface EIP1193Provider {
   request: (args: {
     method: string;
-    params?: unknown[];
+    params?: unknown;
   }) => Promise<unknown>;
   on?: (event: string, callback: (data: unknown) => void) => void;
   removeListener?: (event: string, callback: (data: unknown) => void) => void;
@@ -43,13 +44,49 @@ export class WalletConnectionError extends Error {
 }
 
 /**
- * Detect and connect to an EIP-1193 compatible wallet (MetaMask, Coinbase Wallet, etc.)
+ * Suggest MetaMask add an ERC-20 so Spending Cap UI knows decimals/symbol.
+ * Safe to call repeatedly; user may dismiss. Never throws on rejection.
+ */
+export async function watchErc20Asset(
+  provider: EIP1193Provider,
+  options: {
+    address: Address;
+    symbol: string;
+    decimals: number;
+    chainId?: number;
+    image?: string;
+  }
+): Promise<boolean> {
+  try {
+    const added = await provider.request({
+      method: "wallet_watchAsset",
+      params: {
+        type: "ERC20",
+        options: {
+          address: getAddress(options.address),
+          symbol: options.symbol,
+          decimals: options.decimals,
+          ...(options.chainId != null ? { chainId: options.chainId } : {}),
+          ...(options.image ? { image: options.image } : {}),
+        },
+      },
+    });
+    return added === true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Connect to MetaMask via window.ethereum (EIP-1193).
+ * Multi-wallet picker (EIP-6963) is intentionally not supported yet —
+ * disable other extensions or use Incognito with only MetaMask if connect fails.
  */
 export async function connectWallet(): Promise<WalletConnection> {
   if (!window.ethereum) {
     throw new WalletConnectionError(
       "no_wallet",
-      "No Web3 wallet detected. Please install MetaMask or another compatible wallet."
+      "No MetaMask detected. Install MetaMask, then reload this page."
     );
   }
 
@@ -90,7 +127,9 @@ export async function connectWallet(): Promise<WalletConnection> {
     }
     throw new WalletConnectionError(
       "connection_failed",
-      `Failed to connect wallet: ${error.message || "unknown error"}`
+      `Failed to connect MetaMask: ${error.message || "unknown error"}. ` +
+        "If multiple wallet extensions are installed, disable all except MetaMask " +
+        "or use an Incognito window with only MetaMask enabled."
     );
   }
 }

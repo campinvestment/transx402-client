@@ -1,7 +1,7 @@
 import type { Address } from "viem";
 import type { NetworkConfig, SponsorshipMode } from "../types.js";
-import type { ApiKeyFamily } from "./environment.js";
 import type { WalletChainConfig } from "../wallet.js";
+import type { ApiKeyFamily } from "./environment.js";
 
 /** Canonical Permit2 — `@x402/evm` hardcodes this for allowance checks. */
 export const CANONICAL_PERMIT2_ADDRESS =
@@ -12,12 +12,16 @@ interface FacilitatorEnvConfig {
   chainId: number;
   network: string;
   tokens?: { IDRX?: string };
+  tokenDecimals?: { IDRX?: number };
   permit2Address?: string;
   nativeCurrency?: WalletChainConfig["nativeCurrency"];
   x402?: {
     sponsorshipMode?: SponsorshipMode;
   };
 }
+
+/** IDRX is 2 decimals on all supported networks. */
+export const IDRX_DECIMALS = 2;
 
 interface FacilitatorConfigResponse {
   sandbox?: FacilitatorEnvConfig;
@@ -61,11 +65,19 @@ export async function loadNetworkConfig(
     );
   }
 
+  const tokenDecimals = envConfig.tokenDecimals?.IDRX ?? IDRX_DECIMALS;
+  if (!Number.isInteger(tokenDecimals) || tokenDecimals < 0 || tokenDecimals > 36) {
+    throw new Error(
+      `Facilitator config has invalid tokenDecimals.IDRX=${String(envConfig.tokenDecimals?.IDRX)}`
+    );
+  }
+
   return {
     rpcUrl: envConfig.rpcUrl,
     chainId: envConfig.chainId,
     network: envConfig.network,
     tokenAddress: tokenAddress as Address,
+    tokenDecimals,
     permit2Address: (envConfig.permit2Address ??
       CANONICAL_PERMIT2_ADDRESS) as Address,
     sponsorshipMode: envConfig.x402?.sponsorshipMode ?? "erc20ApprovalRelay",
