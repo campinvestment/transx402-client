@@ -46,7 +46,7 @@ interface PaywallState {
   isOpen: boolean;
   isProcessing: boolean;
   error: string | null;
-  step: "connect" | "pay" | "success";
+  step: "connect" | "approve" | "pay" | "success";
 }
 
 function buildClientOptions(options: PaywallOptions) {
@@ -424,6 +424,7 @@ export class Paywall {
         <div class="transx402-modal-body">
           <div class="transx402-step-indicator">
             <div class="transx402-step ${this.state.step === "connect" ? "active" : ""}"></div>
+            <div class="transx402-step ${this.state.step === "approve" ? "active" : ""}"></div>
             <div class="transx402-step ${this.state.step === "pay" ? "active" : ""}"></div>
           </div>
           <div id="transx402-modal-content">
@@ -445,6 +446,12 @@ export class Paywall {
     if (target.closest("#transx402-connect-btn")) {
       event.preventDefault();
       void this.handleConnect();
+      return;
+    }
+
+    if (target.closest("#transx402-approve-btn")) {
+      event.preventDefault();
+      void this.handleApprove();
       return;
     }
 
@@ -472,15 +479,40 @@ export class Paywall {
     }
   }
 
+  private async resolveStepAfterWalletReady(): Promise<PaywallState["step"]> {
+    const { approved } = await this.client.checkApproval();
+    return approved ? "pay" : "approve";
+  }
+
   private async handleConnect() {
     if (this.state.isProcessing || this.paymentInFlight) return;
 
+    this.setState({ isProcessing: true, error: null });
+
     try {
       await this.client.connectWallet();
-      this.setState({ step: "pay" });
+      const step = await this.resolveStepAfterWalletReady();
+      this.setState({ isProcessing: false, step });
     } catch (err) {
       this.setState({
+        isProcessing: false,
         error: err instanceof Error ? err.message : "Failed to connect wallet",
+      });
+    }
+  }
+
+  private async handleApprove() {
+    if (this.state.isProcessing || this.paymentInFlight) return;
+
+    this.setState({ isProcessing: true, error: null });
+
+    try {
+      await this.client.requestApproval();
+      this.setState({ isProcessing: false, step: "pay" });
+    } catch (err) {
+      this.setState({
+        isProcessing: false,
+        error: err instanceof Error ? err.message : "Approval failed",
       });
     }
   }
@@ -532,11 +564,36 @@ export class Paywall {
         return `
           <div style="text-align: center;">
             <div style="font-size: 3rem; margin-bottom: 1rem;">👛</div>
-            <p style="margin-bottom: 1.5rem; color: #64748b;">
-              Connect your wallet to proceed with the payment
+            <p style="margin-bottom: 1rem; color: #64748b;">
+              Connect MetaMask, then accept adding sandbox IDRX when prompted.
+              MetaMask needs IDRX in your token list to show the spending cap as a number.
             </p>
             <button class="transx402-paywall-button" id="transx402-connect-btn">
               Connect Wallet
+            </button>
+          </div>
+        `;
+
+      case "approve":
+        return `
+          <div style="text-align: center;">
+            <div style="font-size: 3rem; margin-bottom: 1rem;">🔐</div>
+            <p style="margin-bottom: 0.75rem; font-weight: 600;">
+              One-time IDRX approval
+            </p>
+            <p style="margin-bottom: 1rem; color: #64748b; font-size: 0.9rem; text-align: left;">
+              MetaMask will ask you to approve <strong>unlimited IDRX</strong> for the
+              Permit2 contract (standard for gasless payments).
+            </p>
+            <p style="margin-bottom: 1.25rem; color: #64748b; font-size: 0.85rem; text-align: left;">
+              On sandbox networks, MetaMask may show the Permit2 address
+              (<code style="font-size: 0.8rem">0x0000…78BA3</code>) in the
+              <em>Spending cap</em> row — that is a display bug. You are approving
+              IDRX tokens, not sending ETH. Safe to confirm if the transaction is
+              an <strong>Approve</strong> on IDRX.
+            </p>
+            <button class="transx402-paywall-button" id="transx402-approve-btn">
+              Approve in MetaMask
             </button>
           </div>
         `;
@@ -582,7 +639,8 @@ export class Paywall {
     const address = await this.client.isWalletConnected();
 
     if (address) {
-      this.setState({ step: "pay" });
+      const step = await this.resolveStepAfterWalletReady();
+      this.setState({ step });
     }
   }
 
@@ -602,8 +660,9 @@ export class Paywall {
 
     const steps = modal.querySelectorAll(".transx402-step");
     steps.forEach((step, index) => {
-      const stepNames: Array<PaywallState["step"]> = ["connect", "pay"];
-      if (stepNames[index] === this.state.step) {
+      const stepNames: Array<PaywallState["step"]> = ["connect", "approve", "pay"];
+      const activeIndex = stepNames.indexOf(this.state.step);
+      if (index <= activeIndex) {
         step.classList.add("active");
       } else {
         step.classList.remove("active");
