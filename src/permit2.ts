@@ -10,6 +10,7 @@ import {
   type Address,
   type Chain,
   type Hex,
+  type PublicClient,
 } from "viem";
 import type { EIP1193Provider, WalletChainConfig } from "./wallet.js";
 import { ensureChain, watchErc20Asset } from "./wallet.js";
@@ -93,7 +94,10 @@ export class Permit2Error extends Error {
 /**
  * Create a viem public client for reading from the blockchain
  */
-export function createPublicClientForChain(rpcUrl: string, chainId: number) {
+export function createPublicClientForChain(
+  rpcUrl: string,
+  chainId: number
+): PublicClient {
   const chain = defineChain({
     id: chainId,
     name: `transx-${chainId}`,
@@ -104,7 +108,7 @@ export function createPublicClientForChain(rpcUrl: string, chainId: number) {
   return createPublicClient({
     chain,
     transport: http(rpcUrl),
-  });
+  }) as PublicClient;
 }
 
 /**
