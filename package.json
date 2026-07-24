@@ -2,14 +2,16 @@
   "name": "@transx402/client",
   "version": "0.1.0",
   "description": "IDRX x402 payment client for browser and Node.js agents",
-  "private": true,
   "type": "module",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+file:///Users/ruby0322/Projects/camp/transx402-client"
+    "url": "git+https://github.com/campinvestment/transx402-client.git"
   },
-  "homepage": "https://docs.transx402.com/integrations/javascript-library",
+  "bugs": {
+    "url": "https://github.com/campinvestment/transx402-client/issues"
+  },
+  "homepage": "https://github.com/campinvestment/transx402-client#readme",
   "publishConfig": {
     "access": "public"
   },
