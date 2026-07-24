@@ -1,9 +1,20 @@
 {
   "name": "@transx402/client",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "IDRX x402 payment client for browser and Node.js agents",
   "type": "module",
   "license": "MIT",
+  "author": "Camp Investment",
+  "keywords": [
+    "x402",
+    "transx402",
+    "payments",
+    "idr",
+    "idrx",
+    "web3",
+    "permit2",
+    "paywall"
+  ],
   "repository": {
     "type": "git",
     "url": "git+https://github.com/campinvestment/transx402-client.git"
@@ -16,31 +27,43 @@
     "access": "public"
   },
   "files": [
-    "dist"
+    "dist",
+    "!dist/transx402.browser.js.map",
+    "!dist/transx402.browser.min.js.map"
   ],
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
+      "require": "./dist/index.cjs",
       "default": "./dist/index.js"
     },
     "./browser": {
       "types": "./dist/browser/index.d.ts",
       "import": "./dist/browser/index.js",
+      "require": "./dist/browser/index.cjs",
       "default": "./dist/browser/index.js"
     },
     "./agent": {
       "types": "./dist/agent/index.d.ts",
       "import": "./dist/agent/index.js",
+      "require": "./dist/agent/index.cjs",
       "default": "./dist/agent/index.js"
     },
     "./package.json": "./package.json"
   },
   "scripts": {
-    "build": "rm -rf dist && tsc -p tsconfig.build.json && pnpm build:browser",
-    "build:browser": "esbuild src/browser/index.ts --bundle --format=esm --platform=browser --target=es2020 --alias:url=./src/shims/node-url.ts --alias:buffer=buffer --outfile=dist/transx402.browser.js",
+    "build": "rm -rf dist && tsc -p tsconfig.build.json && pnpm build:cjs && pnpm build:browser",
+    "build:cjs": "pnpm build:cjs:main && pnpm build:cjs:browser && pnpm build:cjs:agent",
+    "build:cjs:main": "esbuild src/index.ts --bundle --format=cjs --platform=node --target=es2020 --packages=external --outfile=dist/index.cjs",
+    "build:cjs:browser": "esbuild src/browser/index.ts --bundle --format=cjs --platform=node --target=es2020 --packages=external --outfile=dist/browser/index.cjs",
+    "build:cjs:agent": "esbuild src/agent/index.ts --bundle --format=cjs --platform=node --target=es2020 --packages=external --outfile=dist/agent/index.cjs",
+    "build:browser": "pnpm build:browser:dev && pnpm build:browser:min",
+    "build:browser:dev": "esbuild src/browser/index.ts --bundle --format=esm --platform=browser --target=es2020 --alias:url=./src/shims/node-url.ts --alias:buffer=buffer --sourcemap --outfile=dist/transx402.browser.js",
+    "build:browser:min": "esbuild src/browser/index.ts --bundle --format=esm --platform=browser --target=es2020 --alias:url=./src/shims/node-url.ts --alias:buffer=buffer --minify --sourcemap --outfile=dist/transx402.browser.min.js",
     "dev": "tsc --watch",
     "type-check": "tsc --noEmit",
     "test": "vitest run",
@@ -51,7 +74,9 @@
   },
   "packageManager": "pnpm@9.15.0",
   "pnpm": {
-    "onlyBuiltDependencies": ["esbuild"]
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ]
   },
   "dependencies": {
     "@x402/core": "^2.18.0",

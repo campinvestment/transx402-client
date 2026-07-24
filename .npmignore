@@ -1,0 +1,4 @@
+# Browser source maps are large (~3.5MB each). Generate them in CI/local for CDN
+# debugging; omit from the published npm tarball to keep install size small.
+dist/transx402.browser.js.map
+dist/transx402.browser.min.js.map
