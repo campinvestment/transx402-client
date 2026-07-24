@@ -49,6 +49,10 @@
   "engines": {
     "node": "^20.19.0 || ^22.13.0 || >=24"
   },
+  "packageManager": "pnpm@9.15.0",
+  "pnpm": {
+    "onlyBuiltDependencies": ["esbuild"]
+  },
   "dependencies": {
     "@x402/core": "^2.18.0",
     "@x402/evm": "^2.18.0",
