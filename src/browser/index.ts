@@ -9,6 +9,11 @@ export type {
 } from "../types.js";
 export { WalletConnectionError } from "../wallet.js";
 export { Permit2Error } from "../permit2.js";
+export {
+  FacilitationError,
+  formatFacilitationError,
+  formatIdrxBaseUnits,
+} from "../core/errors.js";
 
 import { createBrowserClient } from "./browser-client.js";
 import { createPaywall, type PaywallOptions } from "../paywall.js";

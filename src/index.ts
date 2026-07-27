@@ -31,6 +31,12 @@ export {
 } from "./permit2.js";
 
 export {
+  FacilitationError,
+  formatFacilitationError,
+  formatIdrxBaseUnits,
+} from "./core/errors.js";
+
+export {
   FACILITATOR_PRESETS,
   resolveFacilitatorUrl,
   assertApiKeyMatchesEnvironment,

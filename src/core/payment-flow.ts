@@ -8,6 +8,13 @@ import type {
   X402PaymentRequired,
 } from "../types.js";
 import type { Address } from "viem";
+import { FacilitationError } from "./errors.js";
+
+export {
+  FacilitationError,
+  formatFacilitationError,
+  formatIdrxBaseUnits,
+} from "./errors.js";
 
 /** Convert IDR amount to IDRX base units (IDRX has 2 decimals). */
 export function toIDRXBaseUnits(idrAmount: string): string {
@@ -93,16 +100,10 @@ export async function settleWithFacilitator(options: {
         details?: Record<string, string>;
       };
     };
+    const code = error.error?.code ?? "facilitation_failed";
+    const message = error.error?.message || "Payment facilitation failed";
     const details = error.error?.details;
-    const detailText =
-      details && Object.keys(details).length > 0
-        ? ` (${Object.entries(details)
-            .map(([key, value]) => `${key}=${value}`)
-            .join(", ")})`
-        : "";
-    throw new Error(
-      (error.error?.message || "Payment facilitation failed") + detailText
-    );
+    throw new FacilitationError(code, message, details);
   }
 
   const result = (await response.json()) as {
@@ -117,6 +118,8 @@ export async function settleWithFacilitator(options: {
 }
 
 export function mapWalletSignerError(err: unknown): Error {
+  if (err instanceof FacilitationError) return err;
+
   const message = err instanceof Error ? err.message : String(err);
   const code =
     err && typeof err === "object" && "code" in err
