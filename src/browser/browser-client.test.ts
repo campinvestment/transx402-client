@@ -29,7 +29,7 @@ function stubSandboxConfig() {
 }
 
 describe("BrowserClient Path 4", () => {
-  test("retries with x402 signature headers and preserves existing headers", async () => {
+  test("retries with x402 signature headers and preserves existing headers (direct)", async () => {
     const fetchMock = vi
       .fn()
       // constructor /config
@@ -61,6 +61,7 @@ describe("BrowserClient Path 4", () => {
     const client = createBrowserClient({
       apiKey: "ipk_sandbox_test",
       facilitatorUrl: "http://localhost:3402",
+      settlement: "direct",
     });
     await (client as any).ensureConfigReady();
 
@@ -145,7 +146,6 @@ describe("BrowserClient Path 4", () => {
 
     expect(response.status).toBe(200);
 
-    // Last call to the resource URL should be the paid retry
     const resourceCalls = fetchMock.mock.calls.filter(
       (c) => c[0] === "https://example.com/resource"
     );
@@ -157,6 +157,111 @@ describe("BrowserClient Path 4", () => {
     expect(retryHeaders.get("X-PAYMENT")).toBe(
       retryHeaders.get("PAYMENT-SIGNATURE")
     );
+
+    const facilitateCalls = fetchMock.mock.calls.filter((c) =>
+      String(c[0]).includes("/facilitate")
+    );
+    expect(facilitateCalls.length).toBe(1);
+  });
+
+  test("server settlement skips /facilitate and retries with PAYMENT-SIGNATURE", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            sandbox: {
+              rpcUrl: "http://localhost:8545",
+              chainId: 1337,
+              network: "sandbox",
+              tokens: { IDRX: "0xBDc7a77b5D1A036Ba057358e4156b3646c5c1211" },
+              permit2Address: "0x000000000022D473030F116dDEE9F6B43aC78BA3",
+              x402: { sponsorshipMode: "erc20ApprovalRelay" },
+            },
+          }),
+          { status: 200 }
+        )
+      )
+      .mockResolvedValueOnce(new Response("payment required", { status: 402 }))
+      .mockResolvedValueOnce(new Response("ok", { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const client = createBrowserClient({
+      apiKey: "ipk_sandbox_test",
+      facilitatorUrl: "http://localhost:3402",
+      settlement: "server",
+    });
+    await (client as any).ensureConfigReady();
+
+    (client as any).walletConnection = {
+      address: "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+      provider: {},
+    };
+    (client as any).publicClient = {
+      readContract: vi.fn().mockResolvedValue(10n ** 18n),
+      getTransactionCount: vi.fn(),
+      estimateFeesPerGas: vi.fn(),
+    };
+    vi.spyOn(client, "isWalletConnected").mockResolvedValue(
+      "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
+    );
+    vi.spyOn(client as any, "parseX402PaymentRequired").mockResolvedValue({
+      x402Version: 2,
+      resource: { url: "https://example.com/resource" },
+      accepts: [
+        {
+          scheme: "exact",
+          network: "eip155:1337",
+          asset: "0xBDc7a77b5D1A036Ba057358e4156b3646c5c1211",
+          amount: "1000",
+          payTo: "0x36e97b771E2d6e1E88a5Cfb814E64F9Bbea81f91",
+          maxTimeoutSeconds: 60,
+          extra: {
+            assetTransferMethod: "permit2",
+            name: "IDRX",
+            version: "1",
+          },
+        },
+      ],
+      extensions: {},
+    });
+    vi.spyOn(client as any, "getHttpPaymentClient").mockResolvedValue({
+      createPaymentPayload: vi.fn().mockResolvedValue({
+        x402Version: 2,
+        accepted: {
+          scheme: "exact",
+          network: "eip155:1337",
+          asset: "0xBDc7a77b5D1A036Ba057358e4156b3646c5c1211",
+          amount: "1000",
+          payTo: "0x36e97b771E2d6e1E88a5Cfb814E64F9Bbea81f91",
+          maxTimeoutSeconds: 60,
+          extra: {
+            assetTransferMethod: "permit2",
+            name: "IDRX",
+            version: "1",
+          },
+        },
+        payload: { signature: "0x1234" },
+        extensions: {},
+      }),
+    });
+
+    const response = await client.fetch("https://example.com/resource");
+    expect(response.status).toBe(200);
+
+    const facilitateCalls = fetchMock.mock.calls.filter((c) =>
+      String(c[0]).includes("/facilitate")
+    );
+    expect(facilitateCalls.length).toBe(0);
+
+    const resourceCalls = fetchMock.mock.calls.filter(
+      (c) => c[0] === "https://example.com/resource"
+    );
+    expect(resourceCalls.length).toBe(2);
+    const retryHeaders = new Headers(
+      (resourceCalls[1]![1] as RequestInit).headers as HeadersInit
+    );
+    expect(retryHeaders.get("PAYMENT-SIGNATURE")).toBeTruthy();
   });
 
   test("never declares erc20ApprovalGasSponsoring (Path 4)", async () => {

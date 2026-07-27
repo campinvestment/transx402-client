@@ -19,12 +19,12 @@ describe("environment resolution", () => {
     expect(resolved.configSection).toBe("sandbox");
   });
 
-  test("camp maps to hosted sandbox URL", () => {
+  test("camp maps to hosted facilitator with sandbox config", () => {
     const resolved = resolveFacilitatorUrl({
       apiKey: "ipk_sandbox_test",
       environment: "camp",
     });
-    expect(resolved.facilitatorUrl).toBe(FACILITATOR_PRESETS.camp);
+    expect(resolved.facilitatorUrl).toBe("https://api.transx402.com");
     expect(resolved.configSection).toBe("sandbox");
   });
 

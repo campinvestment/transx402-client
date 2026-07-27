@@ -17,6 +17,15 @@ export type TransX402Environment = "local" | "camp" | "base";
 
 export type SponsorshipMode = "eip2612" | "erc20ApprovalRelay" | "none";
 
+/**
+ * Who calls TransX402 `POST /facilitate`:
+ * - `server` — client signs and retries with PAYMENT-SIGNATURE; merchant backend settles
+ * - `direct` — client settles with facilitator (paywall / zero-backend)
+ *
+ * Defaults: `fetch()` → `server`; `pay()` / paywall → `direct`.
+ */
+export type SettlementMode = "server" | "direct";
+
 export interface PaymentCallbacks {
   onPaymentStart?: (details: PaymentDetails) => void;
   onPaymentSuccess?: (result: PaymentResult) => void;
@@ -34,12 +43,16 @@ export type TransX402Options =
       apiKey: string;
       environment: TransX402Environment;
       facilitatorUrl?: never;
+      /** Settlement mode for `fetch()`. Default: `"server"`. `pay()` always uses `"direct"`. */
+      settlement?: SettlementMode;
     })
   | (PaymentCallbacks & {
       apiKey: string;
       /** Advanced: custom facilitator. Mutually exclusive with `environment`. */
       facilitatorUrl: string;
       environment?: never;
+      /** Settlement mode for `fetch()`. Default: `"server"`. `pay()` always uses `"direct"`. */
+      settlement?: SettlementMode;
     });
 
 export interface PaymentDetails {

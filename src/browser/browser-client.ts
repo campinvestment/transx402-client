@@ -1,6 +1,7 @@
 import type {
   PaymentResult,
   PaymentRequirements,
+  SettlementMode,
   TransX402Options,
   X402PaymentRequired,
   NetworkConfig,
@@ -59,6 +60,8 @@ export class BrowserClient {
   private apiKey: string;
   private facilitatorUrl: string;
   private options: TransX402Options;
+  /** Settlement for `fetch()` only. `pay()` always settles directly. */
+  private fetchSettlement: SettlementMode;
   private walletConnection: WalletConnection | null = null;
   private publicClient: ReturnType<typeof createPublicClientForChain> | null =
     null;
@@ -70,6 +73,7 @@ export class BrowserClient {
   constructor(options: TransX402Options) {
     this.options = options;
     this.apiKey = options.apiKey;
+    this.fetchSettlement = options.settlement ?? "server";
 
     const resolved = resolveFacilitatorUrl(options);
     this.facilitatorUrl = resolved.facilitatorUrl;
@@ -515,11 +519,15 @@ export class BrowserClient {
       };
       const paymentPayload =
         await paymentClient.createPaymentPayload(sanitized);
-      await settleWithFacilitator({
-        facilitatorUrl: this.facilitatorUrl,
-        apiKey: this.apiKey,
-        paymentPayload,
-      });
+
+      // `direct`: client calls /facilitate. `server`: merchant backend settles.
+      if (this.fetchSettlement === "direct") {
+        await settleWithFacilitator({
+          facilitatorUrl: this.facilitatorUrl,
+          apiKey: this.apiKey,
+          paymentPayload,
+        });
+      }
 
       const paymentSignature = encodePaymentSignatureHeader(paymentPayload);
       const retryHeaders = new Headers(init?.headers);

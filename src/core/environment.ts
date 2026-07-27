@@ -2,7 +2,7 @@ import type { TransX402Environment, TransX402Options } from "../types.js";
 
 export const FACILITATOR_PRESETS = {
   local: "http://localhost:3402",
-  camp: "https://sandbox.transx402.com",
+  camp: "https://api.transx402.com",
   base: "https://api.transx402.com",
 } as const satisfies Record<TransX402Environment, string>;
 

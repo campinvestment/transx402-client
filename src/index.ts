@@ -9,6 +9,7 @@
 export type {
   TransX402Options,
   TransX402Environment,
+  SettlementMode,
   SponsorshipMode,
   PaymentCallbacks,
   PaymentDetails,

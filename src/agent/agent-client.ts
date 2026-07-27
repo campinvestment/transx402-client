@@ -1,6 +1,7 @@
 import type {
   PaymentResult,
   PaymentRequirements,
+  SettlementMode,
   TransX402Options,
   X402PaymentRequired,
   NetworkConfig,
@@ -42,6 +43,8 @@ export class AgentClient {
   private apiKey: string;
   private facilitatorUrl: string;
   private options: AgentClientOptions;
+  /** Settlement for `fetch()` only. `pay()` always settles directly. */
+  private fetchSettlement: SettlementMode;
   private account;
   private publicClient: ReturnType<typeof createPublicClientForChain> | null =
     null;
@@ -52,6 +55,7 @@ export class AgentClient {
   constructor(options: AgentClientOptions) {
     this.options = options;
     this.apiKey = options.apiKey;
+    this.fetchSettlement = options.settlement ?? "server";
     this.account = privateKeyToAccount(options.privateKey);
 
     const resolved = resolveFacilitatorUrl(options);
@@ -253,11 +257,14 @@ export class AgentClient {
 
     const paymentPayload =
       await paymentClient.createPaymentPayload(withExtensions);
-    await settleWithFacilitator({
-      facilitatorUrl: this.facilitatorUrl,
-      apiKey: this.apiKey,
-      paymentPayload,
-    });
+
+    if (this.fetchSettlement === "direct") {
+      await settleWithFacilitator({
+        facilitatorUrl: this.facilitatorUrl,
+        apiKey: this.apiKey,
+        paymentPayload,
+      });
+    }
 
     const paymentSignature = encodePaymentSignatureHeader(paymentPayload);
     const retryHeaders = new Headers(init?.headers);

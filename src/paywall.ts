@@ -84,12 +84,21 @@ function buildClientOptions(options: PaywallOptions) {
     );
   }
 
+  // Paywall has no merchant settle endpoint — always direct facilitation.
   if (options.environment != null) {
-    return { ...base, environment: options.environment } as const;
+    return {
+      ...base,
+      environment: options.environment,
+      settlement: "direct" as const,
+    } as const;
   }
 
   if (options.facilitatorUrl != null) {
-    return { ...base, facilitatorUrl: options.facilitatorUrl } as const;
+    return {
+      ...base,
+      facilitatorUrl: options.facilitatorUrl,
+      settlement: "direct" as const,
+    } as const;
   }
 
   throw new Error(

@@ -4,6 +4,7 @@ IDRX x402 payment client for browser (Path 4) and Node.js agents (Path 3).
 
 - Source: [github.com/campinvestment/transx402-client](https://github.com/campinvestment/transx402-client)
 - npm: [npmjs.com/package/@transx402/client](https://www.npmjs.com/package/@transx402/client)
+- Server companion: [`@transx402/server`](https://www.npmjs.com/package/@transx402/server) — merchant backend facilitation
 - Integration docs: [docs.transx402.com](https://docs.transx402.com/integrations/javascript-library)
 
 ## Install
@@ -14,11 +15,17 @@ npm install @transx402/client
 pnpm add @transx402/client
 ```
 
+For full-stack (canonical) settlement, also install:
+
+```bash
+npm install @transx402/server
+```
+
 ESM and CommonJS are both supported:
 
 ```ts
 // ESM
-import type { PaymentResult } from "@transx402/client";
+import type { PaymentResult, SettlementMode } from "@transx402/client";
 import { createBrowserClient } from "@transx402/client/browser";
 import { createAgentClient } from "@transx402/client/agent";
 ```
@@ -27,6 +34,29 @@ import { createAgentClient } from "@transx402/client/agent";
 // CommonJS
 const { createBrowserClient } = require("@transx402/client/browser");
 const { createAgentClient } = require("@transx402/client/agent");
+```
+
+## Settlement modes
+
+| Mode | Who calls `POST /facilitate` | Default for | API key |
+|------|------------------------------|-------------|---------|
+| **`server`** (canonical) | Merchant backend via `@transx402/server` | `fetch()` | Server env only |
+| **`direct`** | Browser / agent client | `pay()` / `createPaywall()` | Publishable `ipk_` in client |
+
+```ts
+// Canonical full-stack (default for fetch)
+const browser = createBrowserClient({
+  apiKey: "ipk_sandbox_...", // used for /config; facilitate happens on your API
+  environment: "local",
+  settlement: "server", // default
+});
+
+// Zero-backend / paywall-style
+const direct = createBrowserClient({
+  apiKey: "ipk_sandbox_...",
+  environment: "local",
+  settlement: "direct",
+});
 ```
 
 ## Usage
@@ -57,12 +87,15 @@ const agent = createAgentClient({
   apiKey: "ipk_sandbox_...",
   environment: "local",
   privateKey: "0x...",
+  settlement: "server", // default — merchant API must call @transx402/server
 });
 
-await agent.pay({ to: "0x...", amount: "5000", currency: "IDR" });
+await agent.fetch("http://localhost:3000/premium/report");
 ```
 
 ### Paywall (drop-in UI)
+
+Uses **`direct`** settlement (no merchant settle endpoint).
 
 ```ts
 import { createPaywall } from "@transx402/client/browser";
@@ -109,8 +142,10 @@ Package developers only need `apiKey` + `environment` (or `facilitatorUrl`). RPC
 | `environment` | Facilitator | Key prefix |
 |---------------|-------------|------------|
 | `local` | `http://localhost:3402` | `ipk_sandbox_` |
-| `camp` | `https://sandbox.transx402.com` | `ipk_sandbox_` |
+| `camp` | `https://api.transx402.com` | `ipk_sandbox_` |
 | `base` | `https://api.transx402.com` | `ipk_live_` |
+
+Hosted sandbox and production use the **same facilitator host**. Your API key prefix selects the chain config from `GET /config`.
 
 Sandbox → production: use `environment: "base"` with an `ipk_live_...` key. Same payment code.
 
