@@ -1,5 +1,18 @@
-import type { Address, Hex } from "viem";
-import { getAddress } from "viem";
+import { getAddress, parseAbi, type Address, type Hex } from "viem";
+
+const ERC20_BALANCE_ABI = parseAbi([
+  "function balanceOf(address) view returns (uint256)",
+]);
+
+/** Minimal reader for ERC-20 balanceOf — use publicClient, not MetaMask eth_call. */
+export interface Erc20BalanceReader {
+  readContract(args: {
+    address: Address;
+    abi: typeof ERC20_BALANCE_ABI;
+    functionName: "balanceOf";
+    args: [Address];
+  }): Promise<bigint>;
+}
 
 export interface EIP1193Provider {
   request: (args: {
@@ -44,7 +57,32 @@ export class WalletConnectionError extends Error {
 }
 
 /**
+ * True when the user holds a non-zero ERC-20 balance on the configured RPC.
+ * Uses publicClient (direct RPC), not MetaMask eth_call — the provider path
+ * often fails silently on custom chains and caused spurious watchAsset prompts.
+ */
+export async function hasErc20Balance(
+  reader: Erc20BalanceReader,
+  tokenAddress: Address,
+  userAddress: Address
+): Promise<boolean> {
+  try {
+    const balance = await reader.readContract({
+      address: getAddress(tokenAddress),
+      abi: ERC20_BALANCE_ABI,
+      functionName: "balanceOf",
+      args: [getAddress(userAddress)],
+    });
+    return balance > 0n;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Suggest MetaMask add an ERC-20 so Spending Cap UI knows decimals/symbol.
+ * If the user already holds a non-zero balance the prompt is skipped,
+ * since MetaMask auto-detects tokens with balance.
  * Safe to call repeatedly; user may dismiss. Never throws on rejection.
  */
 export async function watchErc20Asset(
@@ -55,9 +93,20 @@ export async function watchErc20Asset(
     decimals: number;
     chainId?: number;
     image?: string;
+    userAddress?: Address;
+    balanceReader?: Erc20BalanceReader;
   }
 ): Promise<boolean> {
   try {
+    if (options.userAddress && options.balanceReader) {
+      const hasBalance = await hasErc20Balance(
+        options.balanceReader,
+        options.address,
+        options.userAddress
+      );
+      if (hasBalance) return true;
+    }
+
     const added = await provider.request({
       method: "wallet_watchAsset",
       params: {

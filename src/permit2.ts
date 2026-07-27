@@ -180,11 +180,23 @@ export async function requestPermit2Approval(
 
     await ensureChain(provider, chainConfig);
 
+    const accounts = (await provider.request({
+      method: "eth_requestAccounts",
+    })) as Address[];
+
+    if (!accounts || accounts.length === 0) {
+      throw new Permit2Error("no_account", "No wallet account connected");
+    }
+
+    const account = accounts[0];
+
     await watchErc20Asset(provider, {
       address: tokenAddress,
       symbol,
       decimals,
       chainId: chainConfig.chainId,
+      userAddress: account,
+      balanceReader: rpcClient,
     });
 
     // Let MetaMask index the token before simulating approve on custom chains.
@@ -197,22 +209,10 @@ export async function requestPermit2Approval(
       rpcUrls: { default: { http: [chainConfig.rpcUrl] } },
     });
 
-    // Create wallet client with custom provider
     const walletClient = createWalletClient({
       chain,
       transport: custom(provider),
     });
-
-    // Get the connected account
-    const accounts = (await provider.request({
-      method: "eth_requestAccounts",
-    })) as Address[];
-
-    if (!accounts || accounts.length === 0) {
-      throw new Permit2Error("no_account", "No wallet account connected");
-    }
-
-    const account = accounts[0];
 
     // Send approval transaction: approve(spender=Permit2, amount=human decimal units)
     const hash = await walletClient.writeContract({

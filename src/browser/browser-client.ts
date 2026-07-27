@@ -135,6 +135,8 @@ export class BrowserClient {
       symbol,
       decimals,
       chainId: cfg.chainId,
+      userAddress: this.walletConnection.address,
+      balanceReader: this.publicClient,
     });
 
     if (!added) {
