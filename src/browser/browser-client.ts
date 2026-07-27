@@ -10,6 +10,7 @@ import {
   checkConnection,
   ensureChain,
   watchErc20Asset,
+  readErc20Balance,
   WalletConnectionError,
   type WalletConnection,
   type WalletChainConfig,
@@ -41,10 +42,13 @@ import {
   needsPermit2AllowanceBaseUnits,
 } from "../core/allowance.js";
 import {
+  FacilitationError,
+  formatFacilitationError,
   buildFallbackPaymentRequired,
   buildPaymentExtensions,
   mapWalletSignerError,
   settleWithFacilitator,
+  toIDRXBaseUnits,
 } from "../core/payment-flow.js";
 
 /**
@@ -276,6 +280,48 @@ export class BrowserClient {
     );
   }
 
+  /**
+   * Fail before MetaMask signature if the payer lacks enough IDRX.
+   * @param amountBaseUnits — already in IDRX base units (2 decimals)
+   */
+  private async assertSufficientIdrxBalance(
+    amountBaseUnits: string
+  ): Promise<void> {
+    if (!this.walletConnection || !this.publicClient) {
+      throw new Error("Wallet not connected");
+    }
+    const cfg = await this.ensureConfigReady();
+    const required = BigInt(amountBaseUnits);
+    let available: bigint;
+    try {
+      available = await readErc20Balance(
+        this.publicClient,
+        cfg.tokenAddress,
+        this.walletConnection.address
+      );
+    } catch {
+      // RPC failure — let facilitator decide
+      return;
+    }
+    if (available < required) {
+      const details = {
+        required: required.toString(),
+        available: available.toString(),
+      };
+      throw new FacilitationError(
+        "insufficient_balance",
+        formatFacilitationError(
+          new FacilitationError(
+            "insufficient_balance",
+            "Payer IDRX balance is below required amount",
+            details
+          )
+        ),
+        details
+      );
+    }
+  }
+
   private async getHttpPaymentClient(): Promise<x402HTTPClient> {
     const cfg = await this.ensureConfigReady();
     if (!this.walletConnection || !this.publicClient) {
@@ -377,6 +423,9 @@ export class BrowserClient {
     });
 
     try {
+      await this.assertSufficientIdrxBalance(
+        toIDRXBaseUnits(requirements.amount)
+      );
       await this.ensurePermit2AllowanceBeforePay(requirements.amount);
 
       const paymentRequired = await this.buildFallbackPaymentRequired({
@@ -431,6 +480,7 @@ export class BrowserClient {
 
     const amount = paymentRequired.accepts?.[0]?.amount;
     if (amount && this.walletConnection && this.publicClient) {
+      await this.assertSufficientIdrxBalance(amount);
       const cfg = await this.ensureConfigReady();
       const needsApprove = await needsPermit2AllowanceBaseUnits(
         this.publicClient,

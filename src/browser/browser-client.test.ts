@@ -227,7 +227,11 @@ describe("BrowserClient Path 4", () => {
       provider: { request: vi.fn() },
     };
     (client as any).publicClient = {
-      readContract: vi.fn().mockResolvedValue(0n),
+      readContract: vi.fn().mockImplementation(async (args: { functionName?: string }) => {
+        // Enough IDRX balance, but zero Permit2 allowance → triggers approve
+        if (args.functionName === "balanceOf") return 10n ** 18n;
+        return 0n;
+      }),
     };
 
     vi.spyOn(client, "isWalletConnected").mockResolvedValue(

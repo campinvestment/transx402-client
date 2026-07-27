@@ -67,16 +67,25 @@ export async function hasErc20Balance(
   userAddress: Address
 ): Promise<boolean> {
   try {
-    const balance = await reader.readContract({
-      address: getAddress(tokenAddress),
-      abi: ERC20_BALANCE_ABI,
-      functionName: "balanceOf",
-      args: [getAddress(userAddress)],
-    });
+    const balance = await readErc20Balance(reader, tokenAddress, userAddress);
     return balance > 0n;
   } catch {
     return false;
   }
+}
+
+/** Read ERC-20 balanceOf via publicClient. */
+export async function readErc20Balance(
+  reader: Erc20BalanceReader,
+  tokenAddress: Address,
+  userAddress: Address
+): Promise<bigint> {
+  return reader.readContract({
+    address: getAddress(tokenAddress),
+    abi: ERC20_BALANCE_ABI,
+    functionName: "balanceOf",
+    args: [getAddress(userAddress)],
+  });
 }
 
 /**
