@@ -5,7 +5,7 @@ All notable changes to `@transx402/client` are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.1.2] — 2026-07-27
+## [0.1.3] — 2026-07-27
 
 ### Fixed
 
@@ -18,6 +18,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `hasErc20Balance` helper and `Erc20BalanceReader` type in `wallet.ts`
 - Unit tests for balance-gated `watchErc20Asset` behaviour
+
+### Note
+
+- `0.1.2` was reserved on the registry without a downloadable tarball; this release
+  replaces that attempt with a complete publish.
 
 ## [0.1.1] — 2026-07-24
 
@@ -44,6 +49,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - ESM modules, TypeScript definitions, and CDN browser bundle
 - Automated tests via Vitest and `prepublishOnly` gate
 
-[0.1.2]: https://github.com/campinvestment/transx402-client/compare/v0.1.1...v0.1.2
+[0.1.3]: https://github.com/campinvestment/transx402-client/compare/v0.1.1...v0.1.3
 [0.1.1]: https://github.com/campinvestment/transx402-client/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/campinvestment/transx402-client/releases/tag/v0.1.0
