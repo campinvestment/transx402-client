@@ -1,5 +1,17 @@
 import { createBrowserClient, type BrowserClient } from "./browser/browser-client.js";
 import type { PaymentResult, TransX402Environment } from "./types.js";
+import {
+  FacilitationError,
+  formatFacilitationError,
+} from "./core/errors.js";
+
+function displayErrorMessage(error: unknown): string {
+  if (error instanceof FacilitationError) {
+    return formatFacilitationError(error);
+  }
+  if (error instanceof Error) return error.message;
+  return String(error);
+}
 
 export interface PaywallOptions {
   /** API key from TransX402 dashboard */
@@ -121,7 +133,7 @@ export class Paywall {
         this.options.onPaymentSuccess?.(result);
       },
       onPaymentError: (error) => {
-        this.setState({ isProcessing: false, error: error.message });
+        this.setState({ isProcessing: false, error: displayErrorMessage(error) });
         this.options.onPaymentError?.(error);
       },
       onWalletConnect: () => {
@@ -496,7 +508,7 @@ export class Paywall {
     } catch (err) {
       this.setState({
         isProcessing: false,
-        error: err instanceof Error ? err.message : "Failed to connect wallet",
+        error: displayErrorMessage(err) || "Failed to connect wallet",
       });
     }
   }
@@ -512,7 +524,7 @@ export class Paywall {
     } catch (err) {
       this.setState({
         isProcessing: false,
-        error: err instanceof Error ? err.message : "Approval failed",
+        error: displayErrorMessage(err) || "Approval failed",
       });
     }
   }
@@ -533,7 +545,7 @@ export class Paywall {
     } catch (err) {
       this.setState({
         isProcessing: false,
-        error: err instanceof Error ? err.message : "Payment failed",
+        error: displayErrorMessage(err) || "Payment failed",
       });
     } finally {
       this.paymentInFlight = false;
