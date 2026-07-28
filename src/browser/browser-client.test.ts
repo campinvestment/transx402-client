@@ -264,6 +264,124 @@ describe("BrowserClient Path 4", () => {
     expect(retryHeaders.get("PAYMENT-SIGNATURE")).toBeTruthy();
   });
 
+  test("server settlement works without apiKey when environment is set", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            sandbox: {
+              rpcUrl: "http://localhost:8545",
+              chainId: 1337,
+              network: "sandbox",
+              tokens: { IDRX: "0xBDc7a77b5D1A036Ba057358e4156b3646c5c1211" },
+              permit2Address: "0x000000000022D473030F116dDEE9F6B43aC78BA3",
+              x402: { sponsorshipMode: "erc20ApprovalRelay" },
+            },
+          }),
+          { status: 200 }
+        )
+      )
+      .mockResolvedValueOnce(new Response("payment required", { status: 402 }))
+      .mockResolvedValueOnce(new Response("ok", { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const client = createBrowserClient({
+      environment: "local",
+      settlement: "server",
+    });
+    await (client as any).ensureConfigReady();
+
+    (client as any).walletConnection = {
+      address: "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+      provider: {},
+    };
+    (client as any).publicClient = {
+      readContract: vi.fn().mockResolvedValue(10n ** 18n),
+    };
+    vi.spyOn(client, "isWalletConnected").mockResolvedValue(
+      "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
+    );
+    vi.spyOn(client as any, "parseX402PaymentRequired").mockResolvedValue({
+      x402Version: 2,
+      resource: { url: "https://example.com/resource" },
+      accepts: [
+        {
+          scheme: "exact",
+          network: "eip155:1337",
+          asset: "0xBDc7a77b5D1A036Ba057358e4156b3646c5c1211",
+          amount: "1000",
+          payTo: "0x36e97b771E2d6e1E88a5Cfb814E64F9Bbea81f91",
+          maxTimeoutSeconds: 60,
+          extra: {
+            assetTransferMethod: "permit2",
+            name: "IDRX",
+            version: "1",
+          },
+        },
+      ],
+      extensions: {},
+    });
+    vi.spyOn(client as any, "getHttpPaymentClient").mockResolvedValue({
+      createPaymentPayload: vi.fn().mockResolvedValue({
+        x402Version: 2,
+        accepted: {},
+        payload: { signature: "0x1234" },
+        extensions: {},
+      }),
+    });
+
+    const response = await client.fetch("https://example.com/resource");
+    expect(response.status).toBe(200);
+    expect(
+      fetchMock.mock.calls.filter((c) => String(c[0]).includes("/facilitate"))
+        .length
+    ).toBe(0);
+  });
+
+  test("direct settlement requires apiKey", async () => {
+    stubSandboxConfig();
+
+    const client = createBrowserClient({
+      environment: "local",
+      settlement: "server",
+    });
+    await (client as any).ensureConfigReady();
+
+    (client as any).fetchSettlement = "direct";
+    (client as any).walletConnection = {
+      address: "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+      provider: {},
+    };
+    (client as any).publicClient = {
+      readContract: vi.fn().mockResolvedValue(10n ** 18n),
+    };
+    vi.spyOn(client, "isWalletConnected").mockResolvedValue(
+      "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
+    );
+    vi.spyOn(client as any, "parseX402PaymentRequired").mockResolvedValue({
+      x402Version: 2,
+      accepts: [{ amount: "1000" }],
+      extensions: {},
+    });
+    vi.spyOn(client as any, "getHttpPaymentClient").mockResolvedValue({
+      createPaymentPayload: vi.fn().mockResolvedValue({
+        payload: { signature: "0x1234" },
+      }),
+    });
+
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValueOnce(new Response("payment required", { status: 402 }))
+    );
+
+    await expect(client.fetch("https://example.com/resource")).rejects.toThrow(
+      /apiKey.*required/i
+    );
+  });
+
   test("never declares erc20ApprovalGasSponsoring (Path 4)", async () => {
     stubSandboxConfig();
 

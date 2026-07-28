@@ -36,7 +36,7 @@ import {
   decodePaymentRequiredHeader,
   encodePaymentSignatureHeader,
 } from "@x402/core/http";
-import { resolveFacilitatorUrl } from "../core/environment.js";
+import { resolveFacilitatorUrl, requireApiKeyForDirectSettlement } from "../core/environment.js";
 import { loadNetworkConfig } from "../core/config.js";
 import {
   needsPermit2Allowance,
@@ -57,7 +57,7 @@ import {
  * Never wires `signTransaction` (MetaMask rejects eth_signTransaction).
  */
 export class BrowserClient {
-  private apiKey: string;
+  private apiKey: string | undefined;
   private facilitatorUrl: string;
   private options: TransX402Options;
   /** Settlement for `fetch()` only. `pay()` always settles directly. */
@@ -72,7 +72,7 @@ export class BrowserClient {
 
   constructor(options: TransX402Options) {
     this.options = options;
-    this.apiKey = options.apiKey;
+    this.apiKey = "apiKey" in options ? options.apiKey : undefined;
     this.fetchSettlement = options.settlement ?? "server";
 
     const resolved = resolveFacilitatorUrl(options);
@@ -442,7 +442,7 @@ export class BrowserClient {
         await paymentClient.createPaymentPayload(paymentRequired);
       const settlement = await settleWithFacilitator({
         facilitatorUrl: this.facilitatorUrl,
-        apiKey: this.apiKey,
+        apiKey: requireApiKeyForDirectSettlement(this.apiKey, "BrowserClient.pay()"),
         paymentPayload,
       });
 
@@ -524,7 +524,10 @@ export class BrowserClient {
       if (this.fetchSettlement === "direct") {
         await settleWithFacilitator({
           facilitatorUrl: this.facilitatorUrl,
-          apiKey: this.apiKey,
+          apiKey: requireApiKeyForDirectSettlement(
+            this.apiKey,
+            'BrowserClient.fetch() with settlement: "direct"'
+          ),
           paymentPayload,
         });
       }

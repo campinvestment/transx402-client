@@ -21,7 +21,7 @@ import {
   decodePaymentRequiredHeader,
   encodePaymentSignatureHeader,
 } from "@x402/core/http";
-import { resolveFacilitatorUrl } from "../core/environment.js";
+import { resolveFacilitatorUrl, requireApiKeyForDirectSettlement } from "../core/environment.js";
 import { loadNetworkConfig } from "../core/config.js";
 import { needsPermit2Allowance, needsPermit2AllowanceBaseUnits } from "../core/allowance.js";
 import {
@@ -40,7 +40,7 @@ export type AgentClientOptions = TransX402Options & {
  * Requires a private-key signer that supports eth_signTransaction.
  */
 export class AgentClient {
-  private apiKey: string;
+  private apiKey: string | undefined;
   private facilitatorUrl: string;
   private options: AgentClientOptions;
   /** Settlement for `fetch()` only. `pay()` always settles directly. */
@@ -54,7 +54,7 @@ export class AgentClient {
 
   constructor(options: AgentClientOptions) {
     this.options = options;
-    this.apiKey = options.apiKey;
+    this.apiKey = "apiKey" in options ? options.apiKey : undefined;
     this.fetchSettlement = options.settlement ?? "server";
     this.account = privateKeyToAccount(options.privateKey);
 
@@ -199,7 +199,7 @@ export class AgentClient {
         await paymentClient.createPaymentPayload(paymentRequired);
       const settlement = await settleWithFacilitator({
         facilitatorUrl: this.facilitatorUrl,
-        apiKey: this.apiKey,
+        apiKey: requireApiKeyForDirectSettlement(this.apiKey, "AgentClient.pay()"),
         paymentPayload,
       });
 
@@ -261,7 +261,10 @@ export class AgentClient {
     if (this.fetchSettlement === "direct") {
       await settleWithFacilitator({
         facilitatorUrl: this.facilitatorUrl,
-        apiKey: this.apiKey,
+        apiKey: requireApiKeyForDirectSettlement(
+          this.apiKey,
+          'AgentClient.fetch() with settlement: "direct"'
+        ),
         paymentPayload,
       });
     }

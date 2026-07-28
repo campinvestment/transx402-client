@@ -36,6 +36,23 @@ export function assertApiKeyMatchesEnvironment(
   }
 }
 
+export function requireApiKeyForDirectSettlement(
+  apiKey: string | undefined,
+  context: string
+): string {
+  if (!apiKey?.trim()) {
+    throw new Error(
+      `\`apiKey\` is required for ${context}. ` +
+        `Omit \`apiKey\` only when \`environment\` is set and \`settlement\` is \`"server"\` (default).`
+    );
+  }
+  return apiKey;
+}
+
+function readOptionalApiKey(options: TransX402Options): string | undefined {
+  return "apiKey" in options ? options.apiKey : undefined;
+}
+
 /**
  * Resolve facilitator URL from a conflict-free options union.
  * Throws if both `environment` and `facilitatorUrl` are set, or neither.
@@ -66,7 +83,10 @@ export function resolveFacilitatorUrl(options: TransX402Options): {
 
   if (hasEnvironment) {
     const environment = options.environment!;
-    assertApiKeyMatchesEnvironment(options.apiKey, environment);
+    const apiKey = readOptionalApiKey(options);
+    if (apiKey != null) {
+      assertApiKeyMatchesEnvironment(apiKey, environment);
+    }
     return {
       facilitatorUrl: FACILITATOR_PRESETS[environment],
       configSection: environmentToConfigSection(environment),
@@ -75,7 +95,13 @@ export function resolveFacilitatorUrl(options: TransX402Options): {
   }
 
   // Advanced: custom facilitator — config section follows API key family
-  const family = detectApiKeyFamily(options.apiKey);
+  const apiKey = readOptionalApiKey(options);
+  if (!apiKey) {
+    throw new Error(
+      "`apiKey` is required when using `facilitatorUrl` without `environment`."
+    );
+  }
+  const family = detectApiKeyFamily(apiKey);
   return {
     facilitatorUrl: options.facilitatorUrl!,
     configSection: family,

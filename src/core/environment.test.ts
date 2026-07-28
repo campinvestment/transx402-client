@@ -14,8 +14,25 @@ describe("environment resolution", () => {
     const resolved = resolveFacilitatorUrl({
       apiKey: "ipk_sandbox_test",
       environment: "local",
+      settlement: "direct",
     });
     expect(resolved.facilitatorUrl).toBe(FACILITATOR_PRESETS.local);
+    expect(resolved.configSection).toBe("sandbox");
+  });
+
+  test("environment without apiKey resolves for server settlement", () => {
+    const resolved = resolveFacilitatorUrl({
+      environment: "local",
+    });
+    expect(resolved.facilitatorUrl).toBe(FACILITATOR_PRESETS.local);
+    expect(resolved.configSection).toBe("sandbox");
+  });
+
+  test("camp without apiKey resolves sandbox config section", () => {
+    const resolved = resolveFacilitatorUrl({
+      environment: "camp",
+    });
+    expect(resolved.facilitatorUrl).toBe("https://api.transx402.com");
     expect(resolved.configSection).toBe("sandbox");
   });
 
@@ -23,6 +40,7 @@ describe("environment resolution", () => {
     const resolved = resolveFacilitatorUrl({
       apiKey: "ipk_sandbox_test",
       environment: "camp",
+      settlement: "direct",
     });
     expect(resolved.facilitatorUrl).toBe("https://api.transx402.com");
     expect(resolved.configSection).toBe("sandbox");
@@ -32,6 +50,7 @@ describe("environment resolution", () => {
     const resolved = resolveFacilitatorUrl({
       apiKey: "ipk_live_test",
       environment: "base",
+      settlement: "direct",
     });
     expect(resolved.facilitatorUrl).toBe(FACILITATOR_PRESETS.base);
     expect(resolved.configSection).toBe("production");
@@ -51,6 +70,7 @@ describe("environment resolution", () => {
     expect(() =>
       resolveFacilitatorUrl({
         apiKey: "ipk_sandbox_test",
+        settlement: "direct",
       } as never)
     ).toThrow(/Set `environment`/i);
   });

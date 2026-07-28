@@ -37,14 +37,23 @@ export interface PaymentCallbacks {
 /**
  * Pick exactly one of `environment` or `facilitatorUrl`.
  * Never set both. Chain params are loaded only from the facilitator's `/config`.
+ *
+ * `apiKey` is omitted when `environment` is set and `settlement` is `"server"` (default).
+ * Required for `settlement: "direct"`, `pay()`, paywall, and `facilitatorUrl` setups.
  */
 export type TransX402Options =
   | (PaymentCallbacks & {
-      apiKey: string;
       environment: TransX402Environment;
       facilitatorUrl?: never;
-      /** Settlement mode for `fetch()`. Default: `"server"`. `pay()` always uses `"direct"`. */
-      settlement?: SettlementMode;
+      /** Default `"server"`. Browser/agent do not call `/facilitate`. */
+      settlement?: "server";
+      apiKey?: never;
+    })
+  | (PaymentCallbacks & {
+      environment: TransX402Environment;
+      facilitatorUrl?: never;
+      settlement: "direct";
+      apiKey: string;
     })
   | (PaymentCallbacks & {
       apiKey: string;

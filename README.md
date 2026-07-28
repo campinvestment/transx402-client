@@ -44,14 +44,13 @@ const { createAgentClient } = require("@transx402/client/agent");
 | **`direct`** | Browser / agent client | `pay()` / `createPaywall()` | Publishable `ipk_` in client |
 
 ```ts
-// Canonical full-stack (default for fetch)
+// Canonical full-stack (default for fetch) — no browser API key
 const browser = createBrowserClient({
-  apiKey: "ipk_sandbox_...", // used for /config; facilitate happens on your API
   environment: "local",
   settlement: "server", // default
 });
 
-// Zero-backend / paywall-style
+// Zero-backend / paywall-style — requires apiKey for POST /facilitate
 const direct = createBrowserClient({
   apiKey: "ipk_sandbox_...",
   environment: "local",
@@ -68,9 +67,10 @@ Self-paid Permit2 approve once; `signTypedData` on each payment.
 ```ts
 import { createBrowserClient } from "@transx402/client/browser";
 
+// Merchant backend settles (Next.js Route Handler + @transx402/server)
 const browser = createBrowserClient({
-  apiKey: "ipk_sandbox_...",
   environment: "local", // "local" | "camp" | "base"
+  settlement: "server",
 });
 
 const response = await browser.fetch("https://yourapi.com/premium-data");
@@ -84,7 +84,6 @@ Sponsored approve once; Permit2 `signTypedData` on each payment.
 import { createAgentClient } from "@transx402/client/agent";
 
 const agent = createAgentClient({
-  apiKey: "ipk_sandbox_...",
   environment: "local",
   privateKey: "0x...",
   settlement: "server", // default — merchant API must call @transx402/server
@@ -137,7 +136,7 @@ Serve `dist/transx402.browser.min.js` (or the unminified `dist/transx402.browser
 
 ## Environments
 
-Package developers only need `apiKey` + `environment` (or `facilitatorUrl`). RPC / IDRX / Permit2 belong in the API configuration, not in your app.
+Package developers need `environment` (or `facilitatorUrl`). Use `apiKey` only for **`direct`** settlement, paywall, and custom facilitator URLs. RPC / IDRX / Permit2 belong in the API configuration, not in your app.
 
 | `environment` | Facilitator | Key prefix |
 |---------------|-------------|------------|
