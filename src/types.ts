@@ -35,29 +35,33 @@ export interface PaymentCallbacks {
 }
 
 /**
- * Pick exactly one of `environment` or `facilitatorUrl`.
- * Never set both. Chain params are loaded only from the facilitator's `/config`.
+ * Set `environment` for network tier (sandbox vs production config from GET /config).
+ * Optionally set `facilitatorUrl` to override the preset host while keeping
+ * `environment`'s config section.
+ *
+ * For advanced setups without `environment`, set `facilitatorUrl` + `apiKey` only.
  *
  * `apiKey` is omitted when `environment` is set and `settlement` is `"server"` (default).
- * Required for `settlement: "direct"`, `pay()`, paywall, and `facilitatorUrl` setups.
+ * Required for `settlement: "direct"`, `pay()`, paywall, and `facilitatorUrl`-only setups.
  */
 export type TransX402Options =
   | (PaymentCallbacks & {
       environment: TransX402Environment;
-      facilitatorUrl?: never;
+      /** Overrides preset facilitator host; config section still follows `environment`. */
+      facilitatorUrl?: string;
       /** Default `"server"`. Browser/agent do not call `/facilitate`. */
       settlement?: "server";
       apiKey?: never;
     })
   | (PaymentCallbacks & {
       environment: TransX402Environment;
-      facilitatorUrl?: never;
+      facilitatorUrl?: string;
       settlement: "direct";
       apiKey: string;
     })
   | (PaymentCallbacks & {
       apiKey: string;
-      /** Advanced: custom facilitator. Mutually exclusive with `environment`. */
+      /** Advanced: custom facilitator without `environment`. Config section follows API key family. */
       facilitatorUrl: string;
       environment?: never;
       /** Settlement mode for `fetch()`. Default: `"server"`. `pay()` always uses `"direct"`. */

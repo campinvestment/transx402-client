@@ -56,14 +56,26 @@ describe("environment resolution", () => {
     expect(resolved.configSection).toBe("production");
   });
 
-  test("throws when both environment and facilitatorUrl are set", () => {
-    expect(() =>
-      resolveFacilitatorUrl({
-        apiKey: "ipk_sandbox_test",
-        environment: "local",
-        facilitatorUrl: "http://localhost:3402",
-      } as never)
-    ).toThrow(/not both/i);
+  test("camp with facilitatorUrl override uses custom host and sandbox section", () => {
+    const resolved = resolveFacilitatorUrl({
+      environment: "camp",
+      facilitatorUrl: "http://localhost:3402",
+    });
+    expect(resolved.facilitatorUrl).toBe("http://localhost:3402");
+    expect(resolved.configSection).toBe("sandbox");
+    expect(resolved.environment).toBe("camp");
+  });
+
+  test("base with facilitatorUrl override uses custom host and production section", () => {
+    const resolved = resolveFacilitatorUrl({
+      apiKey: "ipk_live_test",
+      environment: "base",
+      facilitatorUrl: "http://localhost:3402",
+      settlement: "direct",
+    });
+    expect(resolved.facilitatorUrl).toBe("http://localhost:3402");
+    expect(resolved.configSection).toBe("production");
+    expect(resolved.environment).toBe("base");
   });
 
   test("throws when neither environment nor facilitatorUrl is set", () => {

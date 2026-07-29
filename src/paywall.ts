@@ -18,7 +18,7 @@ export interface PaywallOptions {
   apiKey: string;
   /**
    * Named environment (`local` | `camp` | `base`).
-   * Mutually exclusive with `facilitatorUrl`.
+   * Optional override for preset facilitator host. Config section still follows `environment`.
    */
   environment?: TransX402Environment;
   /**
@@ -78,17 +78,14 @@ function buildClientOptions(options: PaywallOptions) {
     },
   };
 
-  if (options.environment != null && options.facilitatorUrl != null) {
-    throw new Error(
-      "Set either `environment` or `facilitatorUrl`, not both."
-    );
-  }
-
   // Paywall has no merchant settle endpoint — always direct facilitation.
   if (options.environment != null) {
     return {
       ...base,
       environment: options.environment,
+      ...(options.facilitatorUrl != null
+        ? { facilitatorUrl: options.facilitatorUrl }
+        : {}),
       settlement: "direct" as const,
     } as const;
   }

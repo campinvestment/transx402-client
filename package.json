@@ -1,6 +1,6 @@
 {
   "name": "@transx402/client",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "IDRX x402 payment client for browser and Node.js agents",
   "type": "module",
   "license": "MIT",

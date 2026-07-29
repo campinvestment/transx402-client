@@ -54,8 +54,8 @@ function readOptionalApiKey(options: TransX402Options): string | undefined {
 }
 
 /**
- * Resolve facilitator URL from a conflict-free options union.
- * Throws if both `environment` and `facilitatorUrl` are set, or neither.
+ * Resolve facilitator URL and config section from options.
+ * Requires `environment` and/or `facilitatorUrl` (with `apiKey` when environment is omitted).
  */
 export function resolveFacilitatorUrl(options: TransX402Options): {
   facilitatorUrl: string;
@@ -63,18 +63,10 @@ export function resolveFacilitatorUrl(options: TransX402Options): {
   environment: TransX402Environment | null;
 } {
   const hasEnvironment = options.environment != null;
-  const hasFacilitatorUrl =
-    typeof options.facilitatorUrl === "string" &&
-    options.facilitatorUrl.length > 0;
+  const facilitatorOverride = options.facilitatorUrl?.trim();
+  const hasFacilitatorOverride = Boolean(facilitatorOverride);
 
-  if (hasEnvironment && hasFacilitatorUrl) {
-    throw new Error(
-      "Set either `environment` or `facilitatorUrl`, not both. " +
-        "Chain params always come from GET /config."
-    );
-  }
-
-  if (!hasEnvironment && !hasFacilitatorUrl) {
+  if (!hasEnvironment && !hasFacilitatorOverride) {
     throw new Error(
       "Set `environment` (\"local\" | \"camp\" | \"base\") or `facilitatorUrl`. " +
         "No silent default — choose explicitly."
@@ -88,13 +80,14 @@ export function resolveFacilitatorUrl(options: TransX402Options): {
       assertApiKeyMatchesEnvironment(apiKey, environment);
     }
     return {
-      facilitatorUrl: FACILITATOR_PRESETS[environment],
+      facilitatorUrl:
+        facilitatorOverride || FACILITATOR_PRESETS[environment],
       configSection: environmentToConfigSection(environment),
       environment,
     };
   }
 
-  // Advanced: custom facilitator — config section follows API key family
+  // Advanced: custom facilitator without environment — config section follows API key family
   const apiKey = readOptionalApiKey(options);
   if (!apiKey) {
     throw new Error(
@@ -103,7 +96,7 @@ export function resolveFacilitatorUrl(options: TransX402Options): {
   }
   const family = detectApiKeyFamily(apiKey);
   return {
-    facilitatorUrl: options.facilitatorUrl!,
+    facilitatorUrl: facilitatorOverride!,
     configSection: family,
     environment: null,
   };
