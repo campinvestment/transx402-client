@@ -48,9 +48,20 @@ describe("formatFacilitationError", () => {
     expect(formatFacilitationError(err)).toMatch(/Permit2/i);
   });
 
-  test("falls back to message for unknown codes", () => {
+  test("includes errorReason for settlement failures", () => {
+    const err = new FacilitationError(
+      "settlement_failed",
+      "x402 settlement failed",
+      { errorReason: "execution reverted" }
+    );
+    expect(formatFacilitationError(err)).toBe(
+      "x402 settlement failed (execution reverted)"
+    );
+  });
+
+  test("appends code for other unknown codes", () => {
     const err = new FacilitationError("weird", "Something odd happened");
-    expect(formatFacilitationError(err)).toBe("Something odd happened");
+    expect(formatFacilitationError(err)).toBe("Something odd happened [weird]");
   });
 });
 

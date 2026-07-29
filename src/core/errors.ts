@@ -58,5 +58,13 @@ export function formatFacilitationError(error: FacilitationError): string {
     );
   }
 
+  if (details?.errorReason) {
+    return `${message} (${details.errorReason})`;
+  }
+
+  if (code && code !== "facilitation_failed") {
+    return `${message} [${code}]`;
+  }
+
   return message;
 }
