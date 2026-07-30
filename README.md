@@ -4,7 +4,7 @@ IDRX x402 payment client for browser (Path 4) and Node.js agents (Path 3).
 
 - Source: [github.com/campinvestment/transx402-client](https://github.com/campinvestment/transx402-client)
 - npm: [npmjs.com/package/@transx402/client](https://www.npmjs.com/package/@transx402/client)
-- Server companion: [`@transx402/server`](https://www.npmjs.com/package/@transx402/server) — merchant backend facilitation
+- Server companion: [`@transx402/server`](https://www.npmjs.com/package/@transx402/server) — merchant backend facilitation and post-settlement lookup via `verifyPayment()` (`GET /payments/:txHash`)
 - Integration docs: [docs.transx402.com](https://docs.transx402.com/integrations/javascript-library)
 
 ## Install
