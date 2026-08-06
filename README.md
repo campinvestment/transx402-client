@@ -148,6 +148,21 @@ Hosted sandbox and production use the **same facilitator host**. Your API key pr
 
 Sandbox → production: use `environment: "base"` with an `ipk_live_...` key. Same payment code.
 
+### Server settlement + config proxy
+
+With `settlement: "server"` (default for `fetch()`), the browser loads chain params via `GET /config`. Point it at a **same-origin proxy** on your merchant backend to avoid facilitator CORS:
+
+```ts
+import { createBrowserClient } from "@transx402/client/browser";
+
+const client = createBrowserClient({
+  environment: "camp",
+  configProxyPath: "/api/transx402", // → GET /api/transx402/config
+});
+```
+
+Wire the proxy with [`@transx402/server`](https://www.npmjs.com/package/@transx402/server) `handleFacilitatorConfigRequest`. Node agents cannot use relative paths — pass an absolute URL (e.g. `http://localhost:3420/api/transx402`).
+
 ## Local development
 
 ```bash

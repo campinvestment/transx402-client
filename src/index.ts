@@ -38,6 +38,7 @@ export {
 } from "./core/errors.js";
 
 export {
+  DEFAULT_CONFIG_PROXY_PATH,
   FACILITATOR_PRESETS,
   resolveFacilitatorUrl,
   assertApiKeyMatchesEnvironment,

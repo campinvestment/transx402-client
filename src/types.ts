@@ -49,6 +49,11 @@ export type TransX402Options =
       environment: TransX402Environment;
       /** Overrides preset facilitator host; config section still follows `environment`. */
       facilitatorUrl?: string;
+      /**
+       * Same-origin merchant proxy base for GET /config (server settlement).
+       * Mutually exclusive with `facilitatorUrl`. Node agents need an absolute URL.
+       */
+      configProxyPath?: string;
       /** Default `"server"`. Browser/agent do not call `/facilitate`. */
       settlement?: "server";
       apiKey?: never;

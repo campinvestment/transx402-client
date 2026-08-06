@@ -108,4 +108,42 @@ describe("environment resolution", () => {
     expect(resolved.configSection).toBe("sandbox");
     expect(resolved.environment).toBeNull();
   });
+
+  test("configProxyPath uses same-origin base for server settlement", () => {
+    const resolved = resolveFacilitatorUrl({
+      environment: "camp",
+      configProxyPath: "/api/transx402",
+    });
+    expect(resolved.facilitatorUrl).toBe("/api/transx402");
+    expect(resolved.configSection).toBe("sandbox");
+  });
+
+  test("configProxyPath normalizes trailing slashes", () => {
+    const resolved = resolveFacilitatorUrl({
+      environment: "camp",
+      configProxyPath: "/api/transx402/",
+    });
+    expect(resolved.facilitatorUrl).toBe("/api/transx402");
+  });
+
+  test("throws when configProxyPath and facilitatorUrl are both set", () => {
+    expect(() =>
+      resolveFacilitatorUrl({
+        environment: "camp",
+        configProxyPath: "/api/transx402",
+        facilitatorUrl: "http://localhost:3402",
+      })
+    ).toThrow(/either `facilitatorUrl` or `configProxyPath`/i);
+  });
+
+  test("throws when configProxyPath used with direct settlement", () => {
+    expect(() =>
+      resolveFacilitatorUrl({
+        environment: "camp",
+        configProxyPath: "/api/transx402",
+        settlement: "direct",
+        apiKey: "ipk_sandbox_test",
+      })
+    ).toThrow(/only supported for server settlement/i);
+  });
 });

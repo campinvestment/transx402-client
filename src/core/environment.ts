@@ -6,6 +6,9 @@ export const FACILITATOR_PRESETS = {
   base: "https://api.transx402.com",
 } as const satisfies Record<TransX402Environment, string>;
 
+/** Default same-origin config proxy base (client appends `/config`). */
+export const DEFAULT_CONFIG_PROXY_PATH = "/api/transx402";
+
 export type ApiKeyFamily = "sandbox" | "production";
 
 export function detectApiKeyFamily(apiKey: string): ApiKeyFamily {
@@ -53,6 +56,48 @@ function readOptionalApiKey(options: TransX402Options): string | undefined {
   return "apiKey" in options ? options.apiKey : undefined;
 }
 
+function readConfigProxyPath(options: TransX402Options): string | undefined {
+  return "configProxyPath" in options
+    ? options.configProxyPath?.trim()
+    : undefined;
+}
+
+function normalizeConfigProxyPath(path: string): string {
+  const trimmed = path.trim();
+  if (!trimmed.startsWith("/")) {
+    throw new Error(
+      `configProxyPath must start with "/" (received "${path}")`
+    );
+  }
+  return trimmed.replace(/\/+$/, "");
+}
+
+function resolveFacilitatorHost(
+  options: TransX402Options,
+  environment: TransX402Environment
+): string {
+  const facilitatorOverride = options.facilitatorUrl?.trim();
+  const configProxyPath = readConfigProxyPath(options);
+
+  if (facilitatorOverride && configProxyPath) {
+    throw new Error(
+      "Set either `facilitatorUrl` or `configProxyPath`, not both."
+    );
+  }
+
+  if (configProxyPath) {
+    const settlement = "settlement" in options ? options.settlement : "server";
+    if (settlement === "direct") {
+      throw new Error(
+        "`configProxyPath` is only supported for server settlement (default `fetch()` mode)."
+      );
+    }
+    return normalizeConfigProxyPath(configProxyPath);
+  }
+
+  return facilitatorOverride || FACILITATOR_PRESETS[environment];
+}
+
 /**
  * Resolve facilitator URL and config section from options.
  * Requires `environment` and/or `facilitatorUrl` (with `apiKey` when environment is omitted).
@@ -80,8 +125,7 @@ export function resolveFacilitatorUrl(options: TransX402Options): {
       assertApiKeyMatchesEnvironment(apiKey, environment);
     }
     return {
-      facilitatorUrl:
-        facilitatorOverride || FACILITATOR_PRESETS[environment],
+      facilitatorUrl: resolveFacilitatorHost(options, environment),
       configSection: environmentToConfigSection(environment),
       environment,
     };
