@@ -5,6 +5,17 @@ All notable changes to `@transx402/client` are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.5] — 2026-08-06
+
+### Added
+
+- `detectKeyType()` helper (`secret` | `publishable`)
+
+### Fixed
+
+- Recognize `ipk_pub_sandbox_` and `ipk_pub_live_` in `detectApiKeyFamily` so browser paywalls
+  with publishable keys initialize instead of throwing before content is locked
+
 ## [0.2.4] — 2026-08-06
 
 ### Added
