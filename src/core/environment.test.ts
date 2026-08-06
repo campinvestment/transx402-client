@@ -99,6 +99,25 @@ describe("environment resolution", () => {
     ).toThrow(/does not match environment "local"/);
   });
 
+  test("publishable sandbox key resolves with local environment", () => {
+    const resolved = resolveFacilitatorUrl({
+      apiKey: "ipk_pub_sandbox_test",
+      environment: "local",
+      settlement: "direct",
+    });
+    expect(resolved.facilitatorUrl).toBe(FACILITATOR_PRESETS.local);
+    expect(resolved.configSection).toBe("sandbox");
+  });
+
+  test("publishable live key resolves with base environment", () => {
+    const resolved = resolveFacilitatorUrl({
+      apiKey: "ipk_pub_live_test",
+      environment: "base",
+      settlement: "direct",
+    });
+    expect(resolved.configSection).toBe("production");
+  });
+
   test("custom facilitatorUrl uses API key family for config section", () => {
     const resolved = resolveFacilitatorUrl({
       apiKey: "ipk_sandbox_test",

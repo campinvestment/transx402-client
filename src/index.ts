@@ -43,5 +43,6 @@ export {
   resolveFacilitatorUrl,
   assertApiKeyMatchesEnvironment,
   detectApiKeyFamily,
+  detectKeyType,
   requireApiKeyForDirectSettlement,
 } from "./core/environment.js";

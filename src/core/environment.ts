@@ -10,12 +10,22 @@ export const FACILITATOR_PRESETS = {
 export const DEFAULT_CONFIG_PROXY_PATH = "/api/transx402";
 
 export type ApiKeyFamily = "sandbox" | "production";
+export type ApiKeyType = "secret" | "publishable";
+
+export function detectKeyType(apiKey: string): ApiKeyType {
+  if (apiKey.startsWith("ipk_pub_")) return "publishable";
+  return "secret";
+}
 
 export function detectApiKeyFamily(apiKey: string): ApiKeyFamily {
-  if (apiKey.startsWith("ipk_sandbox_")) return "sandbox";
-  if (apiKey.startsWith("ipk_live_")) return "production";
+  if (apiKey.startsWith("ipk_pub_sandbox_") || apiKey.startsWith("ipk_sandbox_")) {
+    return "sandbox";
+  }
+  if (apiKey.startsWith("ipk_pub_live_") || apiKey.startsWith("ipk_live_")) {
+    return "production";
+  }
   throw new Error(
-    `Invalid API key prefix. Expected ipk_sandbox_ or ipk_live_`
+    `Invalid API key prefix. Expected ipk_sandbox_, ipk_live_, ipk_pub_sandbox_, or ipk_pub_live_`
   );
 }
 
