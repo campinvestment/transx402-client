@@ -5,6 +5,12 @@ All notable changes to `@transx402/client` are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.6] — 2026-08-19
+
+### Fixed
+
+- Type-check the runtime test that passes `configProxyPath` with `settlement: "direct"` so CI `tsc --noEmit` succeeds
+
 ## [0.2.5] — 2026-08-06
 
 ### Added
