@@ -162,7 +162,7 @@ describe("environment resolution", () => {
         configProxyPath: "/api/transx402",
         settlement: "direct",
         apiKey: "ipk_sandbox_test",
-      })
+      } as never)
     ).toThrow(/only supported for server settlement/i);
   });
 });
